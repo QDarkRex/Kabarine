@@ -231,6 +231,9 @@ Container `tiktokbot` on a Docker host (currently a VPS; `data/` bind-mounted).
 ---
 
 ## 11. gotchas cheat-sheet
+- **IG `/posts/` lists PINNED posts first** (not newest). `list_recent` fetches `count+3` and sorts by
+  `date` so `recent[0]` is the true newest — `monitor.forward_new` depends on that ordering. Don't revert to
+  raw grid order or forwarding silently stops (a pinned post at index 0 == last_seen → breaks immediately).
 - gallery-dl bare IG profile only *queues* → use `/posts/` and `/stories/`.
 - gallery-dl `--directory` (flat) NOT `--destination` (adds `instagram/<user>/` subdirs).
 - IG single-post/story links need cookies (login redirect when logged out).

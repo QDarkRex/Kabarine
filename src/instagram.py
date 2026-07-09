@@ -49,17 +49,26 @@ def normalize_username(name):
 def list_recent(username, count=3, cookies=None, proxy=None, timeout=60):
     """List an account's most-recent POSTS without downloading media (for monitoring).
 
-    Uses `gallery-dl -j` (metadata-only dump) capped to the newest `count` posts, and
-    de-dupes carousel items down to one entry per post. Returns [{"id": shortcode,
-    "url": post_url}, ...], most-recent first. Needs cookies (Instagram requires login
-    to view a profile). May raise on network/rate-limit errors — callers handle that.
+    Uses `gallery-dl -j` (metadata-only dump) and de-dupes carousel items down to one
+    entry per post. Returns [{"id": shortcode, "url": post_url}, ...], **genuinely
+    newest-first** (sorted by post date). Needs cookies (Instagram requires login to
+    view a profile). May raise on network/rate-limit errors — callers handle that.
+
+    NOTE: Instagram's `/posts/` grid puts **pinned posts first**, which are usually NOT
+    the newest ones. The monitor's dedup assumes recent[0] is the true newest and stops
+    at the last-seen marker, so returning grid order breaks forwarding (a pinned post at
+    index 0 makes it think nothing is new). We therefore (a) fetch a few extra posts so
+    pins don't crowd real ones out of the window, and (b) sort the result by post date.
     """
     username = normalize_username(username)
+    # Instagram allows up to 3 pinned posts; fetch that many extra so the newest `count`
+    # *real* posts still make it into the window even when pins sit at the front.
+    fetch = int(count) + 3
     # /posts/ (not the bare profile, which only *queues* the posts page): -j here
     # dumps per-item metadata carrying post_shortcode.
     url = f"https://www.instagram.com/{username}/posts/"
     cmd = [sys.executable, "-m", "gallery_dl", "-j", "--no-download",
-           "-o", f"extractor.instagram.max-posts={int(count)}",
+           "-o", f"extractor.instagram.max-posts={fetch}",
            "-o", f"extractor.instagram.user-agent={_CHROME_UA}"]
     if cookies:
         cmd += ["--cookies", cookies]
@@ -88,9 +97,16 @@ def list_recent(username, count=3, cookies=None, proxy=None, timeout=60):
         if not code or code in seen:
             continue
         seen.add(code)
+        # `date` is "YYYY-MM-DD HH:MM:SS" (fixed width → lexical sort == chronological).
+        # Missing date sorts last under reverse=True (empty string < any real date).
         out.append({"id": str(code),
-                    "url": meta.get("post_url") or f"https://www.instagram.com/p/{code}/"})
-    return out
+                    "url": meta.get("post_url") or f"https://www.instagram.com/p/{code}/",
+                    "_date": str(meta.get("date") or meta.get("post_date") or "")})
+    # Newest-first by actual post date, then drop the pinned-post padding.
+    out.sort(key=lambda p: p["_date"], reverse=True)
+    for p in out:
+        del p["_date"]
+    return out[:int(count)]
 
 
 def is_video(path):
