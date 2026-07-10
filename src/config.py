@@ -11,12 +11,6 @@ DEFAULTS = {
     "min_request_spacing": 1.5,   # safety floor: never fire TikTok requests faster than this
     "request_jitter": 0.5,        # +/- random seconds added to spacing (less robotic)
     "playlist_scan_count": 5,     # how many recent videos to scan per check
-    # Experimental TikTok stories (Playwright/browser-based discovery)
-    "tiktok_story_enabled": False,        # opt-in; requires TIKTOK_STORY_COOKIES or TIKTOK_COOKIES
-    "tiktok_story_sweep_target_seconds": 1800,  # re-check each story account about every 30 min
-    "tiktok_story_min_request_spacing": 45,     # story checks are browser-heavy; keep them slow
-    "tiktok_story_request_jitter": 10,
-    "tiktok_story_timeout": 45,
     # On-demand
     "auto_detect_links": True,       # auto-download TikTok/Instagram links pasted in chat
     "suppress_link_embeds": True,    # remove Discord's auto link-preview embed once the bot reposts it

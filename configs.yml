@@ -10,16 +10,6 @@ min_request_spacing: 1.5    # safety floor: never request faster than this (seco
 request_jitter: 0.5         # +/- random seconds added to spacing (less robotic)
 playlist_scan_count: 5      # how many recent videos to scan per check
 
-# Experimental TikTok Stories (/tt add type:stories|both)
-# Requires a logged-in TikTok burner cookies.txt. This uses Playwright to open
-# the profile, click the avatar/story entry point, and sniff story video URLs.
-# It is intentionally slow and can break when TikTok changes its web UI.
-tiktok_story_enabled: false
-tiktok_story_sweep_target_seconds: 1800   # re-check each story account roughly every ~30 min
-tiktok_story_min_request_spacing: 45      # story checks launch a browser; keep them slow
-tiktok_story_request_jitter: 10
-tiktok_story_timeout: 45
-
 # On-demand
 auto_detect_links: true      # auto-download TikTok/Instagram links pasted in chat
 suppress_link_embeds: true   # remove Discord's auto link-preview embed after the bot reposts it (needs "Manage Messages")

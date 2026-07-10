@@ -25,20 +25,6 @@ def _resolve_cookies():
     return path
 
 
-def _resolve_optional_cookie(env_name, fallback=None, fallback_name=None):
-    configured = (os.getenv(env_name) or "").strip()
-    path = configured or (fallback or "").strip()
-    if not path:
-        return None
-    if not os.path.exists(path):
-        source = env_name if configured else (fallback_name or "fallback")
-        log.warning("%s set to %s but file not found — continuing without it", source, path)
-        return None
-    source = env_name if configured else (fallback_name or env_name)
-    log.info("using %s from %s", source, path)
-    return path
-
-
 def _resolve_ig_burners():
     """Build the list of Instagram 'burners' — each a (cookies, proxy) pair used to
     poll a shard of the watched accounts, so load (and ban risk) is split across
@@ -98,13 +84,6 @@ async def _run():
     bot.proxy = (os.getenv("TIKTOK_PROXY") or "").strip() or None
     if bot.proxy:
         log.info("routing TikTok requests through a proxy")  # don't log the URL (may hold creds)
-    bot.tiktok_story_cookies = _resolve_optional_cookie(
-        "TIKTOK_STORY_COOKIES", bot.cookies, "TIKTOK_COOKIES")
-    bot.tiktok_story_proxy = (os.getenv("TIKTOK_STORY_PROXY") or os.getenv("TIKTOK_PROXY") or "").strip() or None
-    if cfg.get("tiktok_story_enabled") and not bot.tiktok_story_cookies:
-        log.warning("tiktok_story_enabled is true but no TIKTOK_STORY_COOKIES/TIKTOK_COOKIES file is available")
-    if bot.tiktok_story_proxy:
-        log.info("routing TikTok story browser through a proxy")
     bot.ig_burners = _resolve_ig_burners()
     # On-demand /ig get + paste-detect use the first burner (any will do).
     bot.ig_cookies = bot.ig_burners[0]["cookies"] if bot.ig_burners else None

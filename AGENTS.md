@@ -180,12 +180,10 @@ should show the story poller running and whether forwards/failures occurred.
 
 ## 8. Known limitations / decisions
 
-- **TikTok stories: experimental.** yt-dlp still cannot list stories, so `/tt add type:stories|both` uses
-  `src/tiktok_story.py` (Playwright Chromium) to open a logged-in burner session, click the profile
-  avatar/story entry point, and sniff canonical `tiktok.com/@user/video/<id>` URLs from network responses.
-  It is gated by `tiktok_story_enabled: true` and `TIKTOK_STORY_COOKIES` (or fallback `TIKTOK_COOKIES`).
-  Treat it as fragile: TikTok UI changes can break selectors, the burner may appear as a story viewer, and
-  checks should stay slow (default ~30 min/account).
+- **TikTok stories: NOT monitorable.** yt-dlp has no TikTok story extractor (only single video, user list,
+  sound, tag, effect, collection, live). Pasting a story *link* downloads (it's a `/video/<id>` URL), but an
+  account's stories can't be *listed/discovered* for auto-forward. Would require reverse-engineering TikTok's
+  private story API — out of scope.
 - **Native video codec trade-off:** TikTok native 1080p and IG native reels are often **h265 / VP9**, which
   may not inline-preview on some Discord clients (shows as a downloadable attachment). Chosen deliberately for
   true native quality. `tiktok_native: false` reverts TikTok to h264 (inline, up to 720p). IG uses gallery-dl
