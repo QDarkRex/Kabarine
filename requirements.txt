@@ -1,6 +1,7 @@
 discord.py==2.7.1
 yt-dlp>=2025.1.1
 gallery-dl>=1.28.0   # Instagram /ig downloads (photos + videos + carousels)
+requests>=2.31.0     # cookie-free public-mirror fallback for /ig (download_via_proxy)
 aiosqlite==0.20.0
 python-dotenv==1.0.1
 PyYAML==6.0.1

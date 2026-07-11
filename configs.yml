@@ -17,6 +17,12 @@ suppress_link_embeds: true   # remove Discord's auto link-preview embed after th
 # Instagram (/ig command)
 download_timeout: 180     # kill a gallery-dl download that runs longer than this (seconds)
 max_files_per_post: 20    # safety cap on media files pulled from one IG carousel
+ig_proxy_fallback: true   # if gallery-dl gets nothing (login wall / no cookies), try a cookie-free
+                          # public mirror. PUBLIC posts only; carousels return their FIRST item;
+                          # private posts still can't be fetched.
+ig_monitoring_enabled: false  # downloader-only: /ig get + pasted links work, but the /ig add auto-feed
+                              # pollers DON'T run. Keeps the burner cookie fresh (only used on demand)
+                              # and avoids the datacenter-IP rate-limit spam. Set true to re-enable /ig add.
 
 # Instagram monitoring (/ig add) — deliberately SLOW: Instagram flags aggressive
 # automated access. Accounts are sharded across the configured burners (IG_COOKIES),

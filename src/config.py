@@ -17,6 +17,12 @@ DEFAULTS = {
     # Instagram (/ig)
     "download_timeout": 180,     # kill a gallery-dl download that runs longer than this (seconds)
     "max_files_per_post": 20,    # safety cap on media files pulled from one IG carousel
+    "ig_proxy_fallback": True,   # if gallery-dl gets nothing (login wall / no cookies), try a
+                                 #   cookie-free public mirror (InstaFix-style). PUBLIC posts only;
+                                 #   carousels come back as their first item; private posts still fail.
+    "ig_monitoring_enabled": True,  # set False for a downloader-only bot: /ig get + paste still work,
+                                    #   but the auto-feed pollers don't run (so the burner cookie, used
+                                    #   only on demand, lasts far longer and rarely gets flagged)
     # Instagram monitoring — MUCH slower than TikTok on purpose: Instagram flags
     # aggressive automated access, so we poll each account rarely to protect the burner.
     "ig_sweep_target_seconds": 900,   # per-burner: aim to re-check each of its accounts this often

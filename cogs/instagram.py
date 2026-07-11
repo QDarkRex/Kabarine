@@ -65,6 +65,13 @@ class Instagram(commands.Cog):
         self._backoff = [1.0] * max(len(getattr(bot, "ig_burners", [])), 1)
 
     async def cog_load(self):
+        # Downloader-only mode: skip the auto-feed pollers entirely. /ig get + paste
+        # still work; the burner cookie is then used only on demand, so it lasts much
+        # longer and rarely trips Instagram's automation flags.
+        if not self.bot.cfg.get("ig_monitoring_enabled", True):
+            log.info("instagram monitoring disabled (ig_monitoring_enabled=false) — "
+                     "downloader-only mode, pollers not started")
+            return
         for bi in range(len(self.bot.ig_burners)):
             self._poller_tasks.append(asyncio.create_task(self._run_poller(bi)))
 

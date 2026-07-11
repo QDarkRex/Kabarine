@@ -112,13 +112,26 @@ async def handle_url(channel, url, cfg, cookies, workdir, proxy=None):
         instagram.download, url, workdir, cookies, proxy,
         int(cfg.get("download_timeout", 180)), int(cfg.get("max_files_per_post", 20)),
     )
-    work_dir = info.get("dir")
+    dirs = [info.get("dir")]  # temp download dirs to clean up (gallery-dl + any fallback)
     scratch = []  # compressed temp files to clean up
     try:
         media = info.get("media") or []
         caption = _caption(info)
 
         if not media:
+            # gallery-dl got nothing (usually the login wall / stale cookies). Try the
+            # cookie-free public mirror before giving up — PUBLIC posts only.
+            if cfg.get("ig_proxy_fallback", True):
+                px = await asyncio.to_thread(
+                    instagram.download_via_proxy, url, workdir,
+                    int(cfg.get("download_timeout", 180)))
+                dirs.append(px.get("dir"))
+                if px.get("media"):
+                    log.info("cookie-free mirror delivered %d file(s) for %s",
+                             len(px["media"]), url)
+                    return await post_media(channel, px["media"], caption, cfg, scratch,
+                                            link_fallback=url)
+
             log.warning("no media for %s (rc=%s) %s", url, info.get("returncode"), info.get("stderr"))
             hint = ("\n_(no media returned — the post may be private, the link expired, "
                     "or the bot needs valid Instagram cookies)_")
@@ -128,8 +141,9 @@ async def handle_url(channel, url, cfg, cookies, workdir, proxy=None):
 
         return await post_media(channel, media, caption, cfg, scratch, link_fallback=url)
     finally:
-        if work_dir and os.path.isdir(work_dir):
-            shutil.rmtree(work_dir, ignore_errors=True)
+        for work_dir in dirs:
+            if work_dir and os.path.isdir(work_dir):
+                shutil.rmtree(work_dir, ignore_errors=True)
         for p in scratch:
             if p and os.path.exists(p):
                 try:

@@ -17,9 +17,12 @@ Instagram rate-limits an anonymous client quickly.
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
+
+import requests
 
 # Matches instagram.com post/reel/tv/story/profile links (incl. share-suffixed ones).
 _URL_RE = re.compile(r"https?://(?:www\.)?instagram\.com/[^\s<>()]+", re.IGNORECASE)
@@ -182,6 +185,67 @@ def download(url, dest_dir, cookies=None, proxy=None, timeout=180, max_files=20)
         "returncode": proc.returncode,
         "stderr": (proc.stderr or "").strip()[-400:],
     }
+
+
+# --- cookie-free fallback for PUBLIC posts -----------------------------------
+# Instagram walls posts behind a login, so gallery-dl returns nothing without valid
+# cookies. As a best-effort fallback we ask an "InstaFix"-style public mirror, which
+# keeps its own session: on a crawler/bot User-Agent it 302-redirects `/p/<code>/`
+# straight to the real Instagram CDN file. Works for PUBLIC posts only; a carousel
+# comes back as its first item; private posts still can't be fetched.
+_SHORTCODE_RE = re.compile(r"instagram\.com/(?:p|reel|reels|tv)/([A-Za-z0-9_-]+)", re.IGNORECASE)
+_BOT_UA = "TelegramBot (like TwitterBot)"
+_PROXY_HOSTS = ("kkinstagram.com", "ddinstagram.com", "vxinstagram.com")
+_CT_EXT = {
+    "video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov",
+    "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/heic": ".heic",
+}
+
+
+def _fetch_proxy_media(host, code, work, timeout):
+    """GET one mirror and, if it hands back an actual media file, save it. Returns a
+    list with the saved path, or [] if this host didn't yield media (down, HTML 'open
+    in app' page, private post, unknown content-type, or a suspiciously tiny body)."""
+    url = f"https://{host}/p/{code}/"
+    with requests.get(url, headers={"User-Agent": _BOT_UA}, timeout=timeout,
+                      stream=True, allow_redirects=True) as r:
+        ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        ext = _CT_EXT.get(ctype)
+        if r.status_code != 200 or not ext:
+            return []
+        path = os.path.join(work, f"{code}{ext}")
+        with open(path, "wb") as f:
+            for chunk in r.iter_content(65536):
+                f.write(chunk)
+    if os.path.getsize(path) < 1024:   # too small to be real media — treat as an error page
+        os.remove(path)
+        return []
+    return [path]
+
+
+def download_via_proxy(url, dest_dir, timeout=60):
+    """Cookie-free fallback download for a PUBLIC Instagram post.
+
+    Returns the same shape as `download()` ({"dir","media","username","caption",
+    "webpage_url"}); `media` is empty if no mirror could deliver the file.
+    """
+    m = _SHORTCODE_RE.search(url or "")
+    if not m:
+        return {"dir": None, "media": [], "username": "", "caption": "", "webpage_url": url}
+    code = m.group(1)
+    os.makedirs(dest_dir, exist_ok=True)
+    work = tempfile.mkdtemp(prefix="ig_px_", dir=dest_dir)
+
+    media = []
+    for host in _PROXY_HOSTS:
+        try:
+            media = _fetch_proxy_media(host, code, work, timeout)
+        except Exception:
+            media = []
+        if media:
+            break
+    return {"dir": work, "media": media, "username": "", "caption": "",
+            "webpage_url": url, "via": "proxy"}
 
 
 _DIGITS_RE = re.compile(r"(\d{6,})")
