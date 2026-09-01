@@ -113,11 +113,22 @@ class Tracking(commands.Cog):
     @tt.command(name="get", description="Download and post one TikTok video now")
     @app_commands.describe(url="A TikTok video link")
     async def get(self, interaction: discord.Interaction, url: str):
+        if not tiktok.is_downloadable_url(url):
+            await interaction.response.send_message(
+                "I can only download a single TikTok **video** link. Live rooms "
+                "(`/live`) never end, and a profile link isn't one post.",
+                ephemeral=True)
+            return
         await interaction.response.defer()
         try:
             await handle_url(interaction.channel, url, self.bot.cfg, self.bot.cookies,
                              self._workdir(), self.bot.proxy)
             await interaction.followup.send("✅ Done.", ephemeral=True)
+        except tiktok.LiveContentError as e:
+            log.info("/tt get refused %s (%s)", url, e)
+            await interaction.followup.send(
+                "❌ That link turned out to be a **live stream** — I can only "
+                "download finished videos.", ephemeral=True)
         except Exception:
             log.exception("/tt get failed for %s", url)
             await interaction.followup.send("❌ Couldn't download that link.", ephemeral=True)

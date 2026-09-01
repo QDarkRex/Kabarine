@@ -44,6 +44,22 @@ def find_links(text):
     return _URL_RE.findall(text or "")
 
 
+# Only a single post/reel is downloadable. A LIVE room never ends, and a bare profile
+# link makes gallery-dl walk the WHOLE account until the timeout fires -- both looked
+# like "the bot hangs forever" in practice.
+_POST_URL_RE = re.compile(
+    r"instagram\.com/(?:[^/\s]+/)?(?:p|reel|reels|tv)/[A-Za-z0-9_-]+", re.IGNORECASE)
+_IG_LIVE_RE = re.compile(r"instagram\.com/(?:[^/\s]+/)?live(?:[/?#]|$)", re.IGNORECASE)
+
+
+def is_downloadable_url(url):
+    """True only for single Instagram post/reel/tv links (not live/profile/stories)."""
+    u = (url or "").strip()
+    if not u or _IG_LIVE_RE.search(u):
+        return False
+    return bool(_POST_URL_RE.search(u))
+
+
 def normalize_username(name):
     """'@Foo/ ' -> 'foo'."""
     return (name or "").strip().lstrip("@").strip().strip("/").lower()

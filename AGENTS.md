@@ -229,6 +229,15 @@ Container `tiktokbot` on a Docker host (currently a VPS; `data/` bind-mounted).
 ---
 
 ## 11. gotchas cheat-sheet
+- **LIVE links must never reach the downloaders.** A live room never ends: yt-dlp would
+  stream it forever, the `asyncio.to_thread` worker can't be cancelled from outside, the
+  bot sits on "typing..." and the file fills the disk. Guards, in order:
+  `tiktok.is_downloadable_url()` / `instagram.is_downloadable_url()` (whitelist: only
+  single `/video/`,`/photo/`,`/p/`,`/reel/`,`/tv/` + TikTok short links) → an `is_live`
+  probe inside `tiktok.download()` → a progress hook enforcing `tiktok_download_timeout`
+  and `max_download_mb` from INSIDE the thread. Never widen the paste listeners back to
+  raw `find_links()` — a pasted **profile** link also made gallery-dl crawl the whole
+  account until it timed out.
 - **IG `/posts/` lists PINNED posts first** (not newest). `list_recent` fetches `count+3` and sorts by
   `date` so `recent[0]` is the true newest — `monitor.forward_new` depends on that ordering. Don't revert to
   raw grid order or forwarding silently stops (a pinned post at index 0 == last_seen → breaks immediately).

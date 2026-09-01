@@ -98,9 +98,11 @@ class Instagram(commands.Cog):
                 description="Download an Instagram post/reel/carousel at native resolution")
     @app_commands.describe(url="An instagram.com post, reel, or tv link")
     async def get(self, interaction: discord.Interaction, url: str):
-        if not instagram.find_links(url):
+        if not instagram.is_downloadable_url(url):
             await interaction.response.send_message(
-                "That doesn't look like an Instagram link.", ephemeral=True)
+                "I can only download a single Instagram **post/reel** link "
+                "(`/p/...`, `/reel/...`). Live streams, stories and profile links "
+                "aren't supported.", ephemeral=True)
             return
         await interaction.response.defer(thinking=True)
         try:
@@ -221,7 +223,10 @@ class Instagram(commands.Cog):
             return
         if not self.bot.cfg.get("auto_detect_links", True):
             return
-        links = instagram.find_links(message.content)
+        # Only single posts/reels: a live room never ends, and a profile link would
+        # make gallery-dl crawl the entire account until it times out.
+        links = [u for u in instagram.find_links(message.content)
+                 if instagram.is_downloadable_url(u)]
         if not links:
             return
         for url in links[:3]:

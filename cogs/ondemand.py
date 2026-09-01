@@ -24,7 +24,10 @@ class OnDemand(commands.Cog):
             return
         if not self.bot.cfg.get("auto_detect_links", True):
             return
-        links = tiktok.find_links(message.content)
+        # Live rooms / profile links are skipped: a live never ends, so downloading
+        # one would peg the bot on "typing..." forever and fill the disk.
+        links = [u for u in tiktok.find_links(message.content)
+                 if tiktok.is_downloadable_url(u)]
         if not links:
             return
         for url in links[:3]:  # cap per message
@@ -32,6 +35,8 @@ class OnDemand(commands.Cog):
                 async with message.channel.typing():
                     await handle_url(message.channel, url, self.bot.cfg, self.bot.cookies,
                                      self._workdir(), self.bot.proxy)
+            except tiktok.LiveContentError as e:
+                log.info("skipped %s (%s)", url, e)
             except Exception:
                 log.exception("auto-download failed for %s", url)
         # Strip Discord's redundant link-preview embed now that we've reposted it.

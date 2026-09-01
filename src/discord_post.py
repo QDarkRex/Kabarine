@@ -140,7 +140,9 @@ async def handle_url(channel, url, cfg, cookies, workdir, proxy=None):
     """Download `url` and post it to `channel`. Cleans up the temp file afterwards."""
     max_mb = float(cfg.get("max_upload_mb", 10))
     native = bool(cfg.get("tiktok_native", True))
-    info = await asyncio.to_thread(tiktok.download, url, workdir, cookies, max_mb, proxy, native)
+    info = await asyncio.to_thread(
+        tiktok.download, url, workdir, cookies, max_mb, proxy, native,
+        int(cfg.get("tiktok_download_timeout", 180)), int(cfg.get("max_download_mb", 300)))
     path = info.get("path")
     try:
         if not _is_video(info):

@@ -32,6 +32,10 @@ DEFAULTS = {
     # TikTok video quality
     "tiktok_native": True,       # grab highest resolution even if h265 (native, may not inline-preview);
                                  # set False to force h264 (always inline-plays, but can cap at 720p)
+    # Download safety limits (a LIVE stream never ends; without these yt-dlp would
+    # stream it forever, leak the worker thread and fill the disk)
+    "tiktok_download_timeout": 180,   # abort a TikTok download running longer than this
+    "max_download_mb": 300,           # abort a TikTok download bigger than this
     # Upload handling
     "max_upload_mb": 10,         # Discord free-tier upload cap (~10 MB)
     "compress_oversize": True,   # ffmpeg-compress videos over the cap before falling back to a link

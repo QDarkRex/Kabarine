@@ -9,6 +9,7 @@ only exists as an overlay in TikTok's own player), so no extra work is needed.
 """
 import os
 import re
+import time
 
 import yt_dlp
 
@@ -19,6 +20,45 @@ _URL_RE = re.compile(r"https?://(?:www\.|vm\.|vt\.|m\.)?tiktok\.com/[^\s<>()]+",
 def find_links(text):
     """Return all TikTok URLs found in a string (used for chat auto-detect)."""
     return _URL_RE.findall(text or "")
+
+
+class LiveContentError(RuntimeError):
+    """The link is a LIVE room (or the download ran away).
+
+    A live stream never ends, so yt-dlp would keep pulling it forever: the bot looks
+    stuck on "typing...", the worker thread leaks (a thread started by
+    asyncio.to_thread cannot be cancelled from outside), and the growing file fills
+    the disk. We refuse such links instead of trying.
+    """
+
+
+_LIVE_RE = re.compile(r"tiktok\.com/(?:@[^/\s]+/)?live(?:[/?#]|$)", re.IGNORECASE)
+_POST_RE = re.compile(r"tiktok\.com/(?:@[^/\s]+/)?(?:video|photo)/\d+", re.IGNORECASE)
+_SHORT_RE = re.compile(r"https?://(?:vm|vt|m)\.tiktok\.com/|tiktok\.com/t/", re.IGNORECASE)
+
+
+def is_live_url(url):
+    """True for TikTok LIVE room links."""
+    return bool(_LIVE_RE.search(url or ""))
+
+
+def is_downloadable_url(url):
+    """True only for links that are ONE finished post we can actually download.
+
+    Rejects live rooms, bare profiles, /tag/ and /search links. Short share links
+    (vm./vt./tiktok.com/t/) pass because their real target is only known after
+    resolving -- download() still refuses if it turns out to be live.
+    """
+    u = (url or "").strip()
+    if not u or is_live_url(u):
+        return False
+    return bool(_POST_RE.search(u) or _SHORT_RE.search(u))
+
+
+def _is_live_info(info):
+    info = info or {}
+    return (bool(info.get("is_live"))
+            or (info.get("live_status") or "") in ("is_live", "is_upcoming", "post_live"))
 
 
 def normalize_username(name):
@@ -106,12 +146,17 @@ def _video_format(cap_mb, native=True):
     )
 
 
-def download(url, dest_dir, cookies=None, max_mb=10, proxy=None, native=True):
+def download(url, dest_dir, cookies=None, max_mb=10, proxy=None, native=True,
+             timeout=180, max_download_mb=300):
     """Download one video (watermark-free). Returns metadata incl. local 'path'.
 
     With native=True picks the highest-resolution rendition (see _video_format). For
     photo/slideshow posts (no video stream) yt-dlp yields audio only — callers detect
     that via the returned 'ext'/'vcodec' and fall back to posting the link.
+
+    Raises LiveContentError if the link is a live stream, or if the download blows
+    past `timeout` seconds / `max_download_mb`. The progress hook enforces both from
+    INSIDE the worker thread -- the only way to actually stop yt-dlp here.
     """
     os.makedirs(dest_dir, exist_ok=True)
     opts = _base_opts(cookies, proxy)
@@ -122,7 +167,22 @@ def download(url, dest_dir, cookies=None, max_mb=10, proxy=None, native=True):
         "restrictfilenames": True,
         "overwrites": True,
     })
+    deadline = time.monotonic() + float(timeout)
+    limit_bytes = int(max_download_mb) * 1024 * 1024
+
+    def _guard(d):
+        if time.monotonic() > deadline:
+            raise LiveContentError(
+                "download still running after %ss - endless stream?" % timeout)
+        if (d.get("downloaded_bytes") or 0) > limit_bytes:
+            raise LiveContentError("download exceeded %s MB" % max_download_mb)
+
+    opts["progress_hooks"] = [_guard]
+
     with yt_dlp.YoutubeDL(opts) as ydl:
+        # Probe first: a live room must never reach the downloader.
+        if _is_live_info(ydl.extract_info(url, download=False)):
+            raise LiveContentError("this link is a live stream, not a video")
         info = ydl.extract_info(url, download=True)
         path = ydl.prepare_filename(info)
 

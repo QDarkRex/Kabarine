@@ -5,6 +5,16 @@ Reverse-chronological summary of what shipped. See `git log` for full detail and
 
 ## Unreleased on the server (pushed to `main`, not yet deployed)
 
+- **Live/profile links hung the bot (fix)** — both paste listeners fed *every* matched
+  TikTok/IG URL straight to the downloader. A **live** link made yt-dlp stream the room
+  forever (no overall timeout existed; `socket_timeout` never fires while data flows), so
+  the bot stayed on "typing...", leaked the worker thread and filled the disk; a pasted
+  **profile** link made gallery-dl crawl the entire account until the 180 s timeout. Now:
+  `is_downloadable_url()` whitelists single posts only, `tiktok.download()` probes
+  `is_live` before downloading, and a progress hook enforces `tiktok_download_timeout`
+  (180 s) + `max_download_mb` (300) from inside the worker thread. `/tt get` and `/ig get`
+  explain the refusal; the passive paste listener stays silent.
+
 - **IG post forwarding broken by pinned posts (fix)** — `instagram.list_recent` returned `/posts/` in
   Instagram's grid order, which puts **pinned posts first**. Since `monitor.forward_new` treats `recent[0]`
   as the newest and stops scanning at the last-seen marker, a pinned post at index 0 made the poller think

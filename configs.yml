@@ -37,6 +37,12 @@ ig_playlist_scan_count: 3       # how many recent posts to scan per check
 tiktok_native: true       # true = native resolution even if h265 1080p (may not inline-preview on some
                           # clients); false = force h264 so it always plays inline (can cap TikTok at 720p)
 
+# Download safety limits — a LIVE stream never ends, so without these yt-dlp would
+# stream it forever: the bot looks stuck "typing", the worker thread leaks and the
+# growing file fills the disk. Live/profile links are refused up front too.
+tiktok_download_timeout: 180   # abort a TikTok download running longer than this (seconds)
+max_download_mb: 300           # abort a TikTok download bigger than this
+
 # Upload handling
 max_upload_mb: 50         # Discord Level 2 boost upload cap (~50 MB) — bigger cap = higher native res, less compression
 compress_oversize: true   # try ffmpeg compression before falling back to a link
