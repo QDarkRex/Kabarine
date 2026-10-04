@@ -5,6 +5,16 @@ Reverse-chronological summary of what shipped. See `git log` for full detail and
 
 ## Unreleased on the server (pushed to `main`, not yet deployed)
 
+- **TikTok photo/slideshow posts** — previously nothing was posted: yt-dlp rejects
+  `/photo/<id>` as "Unsupported URL" and fails `/video/<id>` of a photo post with "No video
+  formats found" (so monitoring silently skipped them too). `tiktok.download_photos()` now
+  reads `imagePost.images` from yt-dlp's own TikTok extractor (`_extract_web_data_and_status`
+  — private API, may break on a yt-dlp upgrade) with the public tikwm API as fallback, and
+  downloads the full-res JPEGs. `discord_post.handle_url` routes `/photo/` links there up
+  front and retries any "no video formats" failure (short links, monitored posts) as photos;
+  images are posted via `post_media` (<=10 per message). Unknown codec is no longer treated
+  as audio-only.
+
 - **Live/profile links hung the bot (fix)** — both paste listeners fed *every* matched
   TikTok/IG URL straight to the downloader. A **live** link made yt-dlp stream the room
   forever (no overall timeout existed; `socket_timeout` never fires while data flows), so

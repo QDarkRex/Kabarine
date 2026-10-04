@@ -110,12 +110,12 @@ class Tracking(commands.Cog):
             lines.append(f"• **@{username}** → <#{channel_id}>{mentions.label(mtype, mid)}{mark}")
         await interaction.followup.send("\n".join(lines), ephemeral=True)
 
-    @tt.command(name="get", description="Download and post one TikTok video now")
-    @app_commands.describe(url="A TikTok video link")
+    @tt.command(name="get", description="Download and post one TikTok video or photo post now")
+    @app_commands.describe(url="A TikTok video or photo post link")
     async def get(self, interaction: discord.Interaction, url: str):
         if not tiktok.is_downloadable_url(url):
             await interaction.response.send_message(
-                "I can only download a single TikTok **video** link. Live rooms "
+                "I can only download a single TikTok **video/photo** post link. Live rooms "
                 "(`/live`) never end, and a profile link isn't one post.",
                 ephemeral=True)
             return

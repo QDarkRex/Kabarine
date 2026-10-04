@@ -229,6 +229,11 @@ Container `tiktokbot` on a Docker host (currently a VPS; `data/` bind-mounted).
 ---
 
 ## 11. gotchas cheat-sheet
+- **TikTok photo posts**: yt-dlp can't download them (`/photo/` = Unsupported URL, `/video/<id>`
+  of a photo post = "No video formats found"). `tiktok.download_photos()` pulls the image list
+  from yt-dlp's `TikTokIE._extract_web_data_and_status` (PRIVATE method — re-test after any
+  yt-dlp upgrade; tikwm API is the fallback). Profile listing also works via
+  `tiktokuser:<secUid>` when `@user` listing fails with "Unable to extract secondary user ID".
 - **LIVE links must never reach the downloaders.** A live room never ends: yt-dlp would
   stream it forever, the `asyncio.to_thread` worker can't be cancelled from outside, the
   bot sits on "typing..." and the file fills the disk. Guards, in order:

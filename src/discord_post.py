@@ -6,6 +6,7 @@ nothing is ever silently dropped.
 """
 import asyncio
 import os
+import shutil
 
 import discord
 
@@ -132,25 +133,62 @@ async def send_video(channel, file_path, content, source_url, cfg):
 
 def _is_video(info):
     ext = (info.get("ext") or "").lower()
-    vcodec = (info.get("vcodec") or "none").lower()
-    return ext not in _AUDIO_EXTS and vcodec not in ("", "none")
+    vcodec = (info.get("vcodec") or "").lower()   # "" = unknown -> trust the extension
+    return ext not in _AUDIO_EXTS and vcodec != "none"
+
+
+async def _handle_photos(channel, url, cfg, cookies, workdir, proxy):
+    """Post every image of a TikTok photo/slideshow post (batched, <=10 per message)."""
+    from src.instagram_post import post_media  # lazy: instagram_post imports this module
+    try:
+        res = await asyncio.to_thread(
+            tiktok.download_photos, url, workdir, cookies, proxy,
+            int(cfg.get("tiktok_download_timeout", 180)))
+    except tiktok.LiveContentError:
+        raise
+    except Exception as e:
+        log.warning("photo post download failed for %s (%s); posting link instead", url, e)
+        await channel.send(content=url)
+        return False
+    scratch = []
+    try:
+        caption = _caption({"uploader": res.get("uploader"), "title": res.get("title")})
+        return await post_media(channel, res["media"], caption, cfg, scratch,
+                                link_fallback=res.get("webpage_url") or url)
+    finally:
+        shutil.rmtree(res["dir"], ignore_errors=True)
+        _cleanup(*scratch)
 
 
 async def handle_url(channel, url, cfg, cookies, workdir, proxy=None):
-    """Download `url` and post it to `channel`. Cleans up the temp file afterwards."""
+    """Download `url` and post it to `channel`. Cleans up the temp file afterwards.
+
+    Videos go through yt-dlp. Photo/slideshow posts (which yt-dlp can't download) go
+    through _handle_photos -- either up front for /photo/ links, or as a retry when a
+    short link turns out to be a photo post.
+    """
+    if tiktok.is_photo_url(url):
+        return await _handle_photos(channel, url, cfg, cookies, workdir, proxy)
+
     max_mb = float(cfg.get("max_upload_mb", 10))
     native = bool(cfg.get("tiktok_native", True))
-    info = await asyncio.to_thread(
-        tiktok.download, url, workdir, cookies, max_mb, proxy, native,
-        int(cfg.get("tiktok_download_timeout", 180)), int(cfg.get("max_download_mb", 300)))
+    try:
+        info = await asyncio.to_thread(
+            tiktok.download, url, workdir, cookies, max_mb, proxy, native,
+            int(cfg.get("tiktok_download_timeout", 180)), int(cfg.get("max_download_mb", 300)))
+    except tiktok.LiveContentError:
+        raise
+    except Exception as e:
+        if "no video formats" in str(e).lower():   # a photo post behind a short link
+            return await _handle_photos(channel, url, cfg, cookies, workdir, proxy)
+        raise
+
     path = info.get("path")
     try:
         if not _is_video(info):
-            # photo slideshow / audio-only post — repost the link rather than an audio file
-            caption = _caption(info)
-            await channel.send(content=f"{caption}\n{info['webpage_url']}".strip() if caption
-                               else info["webpage_url"])
-            return False
+            # audio-only result == a slideshow: post its images, not an audio file
+            return await _handle_photos(channel, info.get("webpage_url") or url, cfg,
+                                        cookies, workdir, proxy)
         return await send_video(channel, path, _caption(info), info["webpage_url"], cfg)
     finally:
         _cleanup(path)

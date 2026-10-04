@@ -9,8 +9,11 @@ only exists as an overlay in TikTok's own player), so no extra work is needed.
 """
 import os
 import re
+import shutil
+import tempfile
 import time
 
+import requests
 import yt_dlp
 
 # Matches tiktok.com links incl. short forms (vm./vt./m.) used by the share button.
@@ -194,8 +197,108 @@ def download(url, dest_dir, cookies=None, max_mb=10, proxy=None, native=True,
         "webpage_url": info.get("webpage_url") or url,
         "duration": info.get("duration"),
         "ext": (info.get("ext") or "").lower(),
-        "vcodec": (info.get("vcodec") or "none"),
+        "vcodec": info.get("vcodec"),   # None = unknown, "none" = no video stream
     }
+
+# --- photo / slideshow posts ---------------------------------------------------
+# yt-dlp has no photo support: a /photo/<id> URL is "Unsupported", and /video/<id> of
+# a photo post fails with "No video formats found". Its TikTok extractor still fetches
+# the post's raw JSON though, and `imagePost.images[].imageURL.urlList` holds the
+# full-resolution JPEGs -- so we reuse that (same session, cookies, proxy and bot
+# challenge handling as videos), with the public tikwm API as a fallback in case that
+# private extractor method ever changes.
+_POST_ID_RE = re.compile(r"tiktok\.com/(?:@([^/\s?#]*)/)?(?:photo|video)/(\d+)", re.IGNORECASE)
+_PHOTO_URL_RE = re.compile(r"tiktok\.com/(?:@[^/\s]+/)?photo/\d+", re.IGNORECASE)
+_IMG_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+            "image/heic": ".heic", "image/avif": ".avif"}
+
+
+def is_photo_url(url):
+    """True for TikTok photo/slideshow post links (/photo/<id>)."""
+    return bool(_PHOTO_URL_RE.search(url or ""))
+
+
+def _resolve(ydl, url):
+    """Follow short-link redirects (vm./vt./t/) to the canonical post URL."""
+    if _POST_ID_RE.search(url):
+        return url
+    with ydl.urlopen(url) as r:
+        return r.url
+
+
+def _pick_image_url(url_list):
+    """Prefer a JPEG rendition (Discord can't preview HEIC)."""
+    for u in url_list:
+        if ".jpeg" in u or ".jpg" in u:
+            return u
+    return url_list[0] if url_list else None
+
+
+def _photo_urls_ytdlp(ydl, user, post_id):
+    try:
+        ie = ydl.get_info_extractor("TikTok")
+        data, _status = ie._extract_web_data_and_status(
+            "https://www.tiktok.com/@%s/video/%s" % (user, post_id), post_id)
+    except Exception:
+        return [], "", ""
+    data = data or {}
+    images = (data.get("imagePost") or {}).get("images") or []
+    urls = [_pick_image_url((im.get("imageURL") or {}).get("urlList") or []) for im in images]
+    return ([u for u in urls if u], (data.get("author") or {}).get("uniqueId") or "",
+            data.get("desc") or "")
+
+
+def _photo_urls_tikwm(url, proxy=None):
+    try:
+        r = requests.get("https://www.tikwm.com/api/", params={"url": url}, timeout=30,
+                         proxies={"http": proxy, "https": proxy} if proxy else None)
+        d = (r.json() or {}).get("data") or {}
+    except Exception:
+        return [], "", ""
+    return (list(d.get("images") or []), (d.get("author") or {}).get("unique_id") or "",
+            d.get("title") or "")
+
+
+def download_photos(url, dest_dir, cookies=None, proxy=None, timeout=180, max_items=35):
+    """Download every image of a TikTok photo/slideshow post (TikTok allows up to 35).
+
+    Returns {"dir", "media": [paths], "uploader", "title", "webpage_url"}. Raises if the
+    post has no images, or LiveContentError if it runs past `timeout` seconds. The
+    caller removes "dir".
+    """
+    os.makedirs(dest_dir, exist_ok=True)
+    work = tempfile.mkdtemp(prefix="tt_photo_", dir=dest_dir)
+    deadline = time.monotonic() + float(timeout)
+    try:
+        with yt_dlp.YoutubeDL(_base_opts(cookies, proxy)) as ydl:
+            final = _resolve(ydl, url)
+            m = _POST_ID_RE.search(final)
+            if not m:
+                raise RuntimeError("not a TikTok post link: %s" % final)
+            user, post_id = m.group(1) or "", m.group(2)
+            urls, uploader, title = _photo_urls_ytdlp(ydl, user, post_id)
+            if not urls:
+                urls, uploader, title = _photo_urls_tikwm(final, proxy)
+            if not urls:
+                raise RuntimeError("no images found in TikTok post %s" % post_id)
+
+            media = []
+            for i, u in enumerate(urls[:max_items], 1):
+                if time.monotonic() > deadline:
+                    raise LiveContentError("photo download still running after %ss" % timeout)
+                with ydl.urlopen(u) as r:
+                    ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+                    path = os.path.join(work, "%s_%02d%s" % (post_id, i, _IMG_EXT.get(ctype, ".jpg")))
+                    with open(path, "wb") as f:
+                        shutil.copyfileobj(r, f)
+                media.append(path)
+    except Exception:
+        shutil.rmtree(work, ignore_errors=True)
+        raise
+
+    who = uploader or user
+    return {"dir": work, "media": media, "uploader": who, "title": title,
+            "webpage_url": "https://www.tiktok.com/@%s/photo/%s" % (who, post_id)}
 
 
 if __name__ == "__main__":
