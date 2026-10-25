@@ -11,6 +11,11 @@ DEFAULTS = {
     "min_request_spacing": 1.5,   # safety floor: never fire TikTok requests faster than this
     "request_jitter": 0.5,        # +/- random seconds added to spacing (less robotic)
     "playlist_scan_count": 5,     # how many recent videos to scan per check
+    # TikTok stories (/tt add type:stories) — own, slower poller: a story stays up 24h,
+    # so checking every few minutes buys nothing. See src/tiktok_story.py.
+    "tiktok_story_enabled": True,        # kill switch for the story poller
+    "tiktok_story_sweep_seconds": 600,   # aim to re-check each story subscription this often
+    "tiktok_story_min_spacing": 3,       # never fire story requests faster than this (seconds)
     # On-demand
     "auto_detect_links": True,       # auto-download TikTok/Instagram links pasted in chat
     "suppress_link_embeds": True,    # remove Discord's auto link-preview embed once the bot reposts it

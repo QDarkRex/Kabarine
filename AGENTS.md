@@ -180,10 +180,18 @@ should show the story poller running and whether forwards/failures occurred.
 
 ## 8. Known limitations / decisions
 
-- **TikTok stories: NOT monitorable.** yt-dlp has no TikTok story extractor (only single video, user list,
-  sound, tag, effect, collection, live). Pasting a story *link* downloads (it's a `/video/<id>` URL), but an
-  account's stories can't be *listed/discovered* for auto-forward. Would require reverse-engineering TikTok's
-  private story API — out of scope.
+- **TikTok stories: monitored through gallery-dl, not yt-dlp** (`/tt add type:stories|both`, 2026-10-25).
+  yt-dlp still has no TikTok story extractor; gallery-dl's `TiktokStoriesExtractor` lists them. From the
+  server its profile-page lookup is answered **403**, so `src/tiktok_story.py` resolves each account's
+  **numeric user id once via yt-dlp** (cached in the `tiktok_user_ids` table) and lists
+  `tiktok.com/@<numeric id>/stories`, which gallery-dl serves without touching the profile page. "No active
+  story" makes gallery-dl's cursor crash ("Could not extract next cursor") — read as an empty list. Story
+  markers are compared **numerically** (`monitor.forward_new(by_id=True)`), because the marked story expires
+  after 24h and the walk-until-marker logic used for videos would then re-send every story still up.
+  Anonymous; no browser. Depends on an undocumented TikTok endpoint and gallery-dl internals — a gallery-dl
+  upgrade can break it (the build currently keeps the cached pip layer: gallery-dl 1.32.15). The earlier
+  Playwright watcher (`f58e45a`, on `main`) is **superseded** and uses the same file/config names — don't
+  merge both.
 - **Native video codec trade-off:** TikTok native 1080p and IG native reels are often **h265 / VP9**, which
   may not inline-preview on some Discord clients (shows as a downloadable attachment). Chosen deliberately for
   true native quality. `tiktok_native: false` reverts TikTok to h264 (inline, up to 720p). IG uses gallery-dl
@@ -198,10 +206,9 @@ should show the story poller running and whether forwards/failures occurred.
 
 ## 9. Deployment
 
-> **Current deploy status & risks live in [`STATUS.md`](STATUS.md) — read it first.** In short:
-> the live server may be behind `main`, and the Playwright TikTok-story watcher needs **more RAM than
-> `compose.yml`'s `mem_limit: 512m`** (Chromium OOMs). Raise `mem_limit` to ≥1.5g and confirm host
-> headroom **before** setting `tiktok_story_enabled: true`. It also enlarges the image (~1 GB, Chromium).
+> **Current deploy status & risks live in [`STATUS.md`](STATUS.md) — read it first.** The server runs
+> branch `deploy/ig-fixes-lean`, not `main`. Its TikTok story poller is the gallery-dl one (no Chromium,
+> fits `mem_limit: 512m`); the Playwright watcher on `main` is superseded.
 
 Container `tiktokbot` on a Docker host (currently a VPS; `data/` bind-mounted).
 - **Code change** → rebuild: `docker compose up -d --build`.

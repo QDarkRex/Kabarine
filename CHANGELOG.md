@@ -3,6 +3,17 @@
 Reverse-chronological summary of what shipped. See `git log` for full detail and
 [`STATUS.md`](STATUS.md) for what is currently deployed vs. pending.
 
+## 2026-10-25 — deployed from `deploy/ig-fixes-lean`
+
+- **TikTok story auto-forward** — `/tt add type:stories|both`. yt-dlp can't list stories, but gallery-dl's
+  TikTok stories extractor can; from the server its profile-page lookup is 403'd, so the numeric user id is
+  resolved once via yt-dlp (cached in `tiktok_user_ids`) and `tiktok.com/@<id>/stories` is listed instead.
+  Stories are downloaded through the existing yt-dlp path. Own slower poller (`tiktok_story_sweep_seconds`,
+  default 600). Story markers compare ids numerically so an expired story can't trigger re-sends.
+  Supersedes the Playwright watcher (`f58e45a`).
+- `/tt remove` gained `type:` (default: videos and stories); `/tt list` shows each subscription's type and
+  is split into several messages — with ~57 accounts it exceeded Discord's 2000-character limit.
+
 ## Unreleased on the server (pushed to `main`, not yet deployed)
 
 - **TikTok photo/slideshow posts** — previously nothing was posted: yt-dlp rejects
