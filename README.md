@@ -1,5 +1,7 @@
 # 📮 Kabarine
 
+[![tests](https://github.com/QDarkRex/Kabarine/actions/workflows/tests.yml/badge.svg)](https://github.com/QDarkRex/Kabarine/actions/workflows/tests.yml)
+
 > *Kabar* is Indonesian for "news", and Erine is the author's oshi (favourite idol). So: the
 > bot that brings you news from the accounts you care about, named after the one account the
 > author cares about most.
