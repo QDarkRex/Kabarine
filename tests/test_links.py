@@ -82,3 +82,65 @@ def test_tt_add_with_video_link(monkeypatch, tmp_path):
     assert "@indahjkt48" in replies[0] and replies[0].startswith("✅")
     rows = asyncio.run(db.get_enabled(path, "tiktok", "post"))
     assert rows == [("indahjkt48", "5", None, None, "7562")], rows
+
+
+def test_instagram_story_links():
+    from src import instagram
+    ok = ["https://www.instagram.com/stories/jkt48.aralie/4018716417561479192/?utm_source=ig_story_item_share&igsh=x",
+          "https://instagram.com/stories/jkt48.aralie/",
+          "https://www.instagram.com/stories/highlights/17912345678901234/",
+          "https://www.instagram.com/s/aGlnaGxpZ2h0OjE3OTEy?story_media_id=123&igsh=x",
+          "https://www.instagram.com/p/DAbc123/",
+          "https://www.instagram.com/reel/DAbc123/?igsh=x"]
+    no = ["https://www.instagram.com/stories/me/",            # the burner's whole story tray
+          "https://www.instagram.com/stories/highlights/",
+          "https://www.instagram.com/jkt48.aralie/",          # profile: would crawl everything
+          "https://www.instagram.com/jkt48.aralie/live/"]
+    assert [u for u in ok if not instagram.is_downloadable_url(u)] == []
+    assert [u for u in no if instagram.is_downloadable_url(u)] == []
+    assert instagram.is_story_url(ok[0]) and not instagram.is_story_url(ok[4])
+
+
+def test_instagram_story_caption_and_no_mirror(monkeypatch, tmp_path):
+    """A story link posts as '@user — story' and never asks the /p/ mirrors."""
+    from src import instagram_post
+    img = tmp_path / "4018716417561479192.jpg"
+    img.write_bytes(b"x" * 2048)
+    sent = []
+
+    def download(url, *a, **k):
+        return {"dir": None, "media": [str(img)], "username": "jkt48.aralie", "caption": ""}
+
+    def mirror(*a, **k):
+        raise AssertionError("mirror must not be used for stories")
+
+    async def post_media(channel, media, caption, cfg, scratch, link_fallback=None):
+        sent.append((media, caption))
+        return True
+    monkeypatch.setattr(instagram_post.instagram, "download", download)
+    monkeypatch.setattr(instagram_post.instagram, "download_via_proxy", mirror)
+    monkeypatch.setattr(instagram_post, "post_media", post_media)
+    url = "https://www.instagram.com/stories/jkt48.aralie/4018716417561479192/"
+    assert asyncio.run(instagram_post.handle_url(None, url, {}, None, str(tmp_path)))
+    assert sent == [([str(img)], "**@jkt48.aralie** — story")]
+
+
+def test_instagram_expired_story(monkeypatch, tmp_path):
+    """Nothing came back (story expired): no mirror attempt, and the hint says why."""
+    import types
+
+    from src import instagram_post
+    texts = []
+
+    async def send(content=None, **k):
+        texts.append(content)
+
+    def mirror(*a, **k):
+        raise AssertionError("mirror must not be used for stories")
+    monkeypatch.setattr(instagram_post.instagram, "download",
+                        lambda *a, **k: {"dir": None, "media": [], "username": "", "caption": ""})
+    monkeypatch.setattr(instagram_post.instagram, "download_via_proxy", mirror)
+    url = "https://www.instagram.com/stories/jkt48.aralie/4018716417561479192/"
+    assert asyncio.run(instagram_post.handle_url(types.SimpleNamespace(send=send), url, {},
+                                                 None, str(tmp_path))) is False
+    assert len(texts) == 1 and "24 h" in texts[0] and url in texts[0]

@@ -1,7 +1,7 @@
 """The whole `/ig` command group + Instagram post/story monitoring.
 
 Commands (mirroring `/tt`):
-  /ig get <url>                        on-demand download of a post/reel/carousel
+  /ig get <url>                        on-demand download of a post/reel/carousel/story
   /ig add <user> [chan] [tag] [type]   forward an account's NEW posts and/or stories
   /ig remove <user> [chan]
   /ig list
@@ -95,14 +95,14 @@ class Instagram(commands.Cog):
     # ---- commands ---------------------------------------------------------
 
     @ig.command(name="get",
-                description="Download an Instagram post/reel/carousel at native resolution")
-    @app_commands.describe(url="An instagram.com post, reel, or tv link")
+                description="Download an Instagram post/reel/carousel/story at native resolution")
+    @app_commands.describe(url="An instagram.com post, reel, tv or story link")
     async def get(self, interaction: discord.Interaction, url: str):
         if not instagram.is_downloadable_url(url):
             await interaction.response.send_message(
                 "I can only download a single Instagram **post/reel** link "
-                "(`/p/...`, `/reel/...`). Live streams, stories and profile links "
-                "aren't supported.", ephemeral=True)
+                "(`/p/...`, `/reel/...`) or a **story** link (`/stories/...`). Live streams "
+                "and profile links aren't supported.", ephemeral=True)
             return
         await interaction.response.defer(thinking=True)
         try:
@@ -229,8 +229,9 @@ class Instagram(commands.Cog):
             return
         if not self.bot.cfg.get("auto_detect_links", True):
             return
-        # Only single posts/reels: a live room never ends, and a profile link would
-        # make gallery-dl crawl the entire account until it times out.
+        # Only single posts/reels and stories: a live room never ends, and a profile
+        # link would make gallery-dl crawl the entire account until it times out.
+        # (Opening a story puts the burner in that account's story-viewers list.)
         links = [u for u in instagram.find_links(message.content)
                  if instagram.is_downloadable_url(u)]
         if not links:

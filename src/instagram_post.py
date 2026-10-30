@@ -114,14 +114,18 @@ async def handle_url(channel, url, cfg, cookies, workdir, proxy=None):
     )
     dirs = [info.get("dir")]  # temp download dirs to clean up (gallery-dl + any fallback)
     scratch = []  # compressed temp files to clean up
+    story = instagram.is_story_url(url)
     try:
         media = info.get("media") or []
         caption = _caption(info)
+        if story and info.get("username"):
+            caption = f"**@{info['username']}** — story"
 
         if not media:
             # gallery-dl got nothing (usually the login wall / stale cookies). Try the
-            # cookie-free public mirror before giving up — PUBLIC posts only.
-            if cfg.get("ig_proxy_fallback", True):
+            # cookie-free public mirror before giving up — PUBLIC posts only (the
+            # mirrors don't serve stories).
+            if cfg.get("ig_proxy_fallback", True) and not story:
                 px = await asyncio.to_thread(
                     instagram.download_via_proxy, url, workdir,
                     int(cfg.get("download_timeout", 180)))
@@ -133,8 +137,12 @@ async def handle_url(channel, url, cfg, cookies, workdir, proxy=None):
                                             link_fallback=url)
 
             log.warning("no media for %s (rc=%s) %s", url, info.get("returncode"), info.get("stderr"))
-            hint = ("\n_(no media returned — the post may be private, the link expired, "
-                    "or the bot needs valid Instagram cookies)_")
+            if story:
+                hint = ("\n_(no media returned — stories expire after 24 h; the account may "
+                        "also be private, or the bot needs valid Instagram cookies)_")
+            else:
+                hint = ("\n_(no media returned — the post may be private, the link expired, "
+                        "or the bot needs valid Instagram cookies)_")
             await channel.send(content=f"{caption}\n{url}".strip() + hint if caption
                                else f"{url}{hint}")
             return False

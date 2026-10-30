@@ -116,8 +116,11 @@ Video: `tiktok_native` (true = highest res even if h265; false = force h264/inli
 
 ## 6. How IG stories work (the feature under investigation)
 
-Instagram has **no per-item story URL** (downloading `stories/<user>/<media_id>/` returns 404). Stories can
-only be pulled as the **whole current set**. So:
+The poller pulls the **whole current set** and works out which items are new. (An old note here said
+`stories/<user>/<media_id>/` returns 404. Re-tested 2026-10-30 on gallery-dl 1.32.18 with the burner:
+that link downloads exactly that one item, so pasted/`/ig get` story links go through the normal
+`instagram.download` path — see `is_story_url`. `/stories/me/` is refused: it's the burner's whole tray.)
+The poller:
 
 - `instagram.list_stories(user)` — `gallery-dl -j --no-download` on `instagram.com/stories/<user>/`,
   returns `[{"id": media_id}, ...]` newest-first (from the `media_id` field). Cheap check.

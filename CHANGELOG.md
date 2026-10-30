@@ -2,6 +2,13 @@
 
 Reverse-chronological summary of what shipped. See `git log` for full detail.
 
+## 2026-10-30 (late) — Instagram story links
+
+- **Story links download on demand** — paste (or `/ig get`) `instagram.com/stories/<user>/<id>/`
+  for that one story, `/stories/<user>/` for everything currently up, or a highlight link. Posted as
+  "@user — story". Works without turning on monitoring (`ig_monitoring_enabled: false` is fine).
+  Needs the burner cookie; opening a story puts the burner in that account's viewer list.
+
 ## 2026-10-30 (later) — health alerts, watchdog, public release
 
 - **Health alerts** (`src/health.py`) — the bot DMs its owner (or `health_alert_channel_id`) when a

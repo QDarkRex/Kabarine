@@ -17,7 +17,7 @@ link into the actual media, at native resolution, without watermarks.
 | | On demand | Auto-forward new content |
 | --- | --- | --- |
 | **TikTok** | `/tt get <url>` or just paste a link. Videos, photo/slideshow posts | `/tt add` → new **videos** and/or **stories**, each labelled "🎬 TikTok Post" / "📖 TikTok Story" |
-| **Instagram** | `/ig get <url>` or paste. Posts, reels, carousels (photos *and* videos) | `/ig add` → new **posts** and/or **stories** (needs a burner login) |
+| **Instagram** | `/ig get <url>` or paste. Posts, reels, carousels (photos *and* videos), story & highlight links | `/ig add` → new **posts** and/or **stories** (needs a burner login) |
 | **X / Twitter** | `/x get <url>` or paste. Original-size photos, best-quality video | — (try [Tweetcord](https://github.com/Yuuzi261/Tweetcord) for that) |
 
 Also:

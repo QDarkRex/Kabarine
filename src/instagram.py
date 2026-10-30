@@ -50,14 +50,25 @@ def find_links(text):
 _POST_URL_RE = re.compile(
     r"instagram\.com/(?:[^/\s]+/)?(?:p|reel|reels|tv)/[A-Za-z0-9_-]+", re.IGNORECASE)
 _IG_LIVE_RE = re.compile(r"instagram\.com/(?:[^/\s]+/)?live(?:[/?#]|$)", re.IGNORECASE)
+# Story links gallery-dl fetches directly: one item (/stories/<user>/<id>/), a user's
+# current set (/stories/<user>/) or a highlight (/stories/highlights/<id>/, or the
+# /s/aGlnaGxpZ2h0... share link). Never /stories/me/ — that's the burner's whole tray.
+_STORY_URL_RE = re.compile(
+    r"instagram\.com/(?:stories/(?:highlights/\d+|(?!(?:me|highlights)(?:[/?#]|$))[A-Za-z0-9._]+(?:/\d+)?)"
+    r"|s/aGlnaGxpZ2h0)", re.IGNORECASE)
+
+
+def is_story_url(url):
+    return bool(_STORY_URL_RE.search(url or ""))
 
 
 def is_downloadable_url(url):
-    """True only for single Instagram post/reel/tv links (not live/profile/stories)."""
+    """True for single Instagram post/reel/tv links and story/highlight links (not
+    live/profile)."""
     u = (url or "").strip()
     if not u or _IG_LIVE_RE.search(u):
         return False
-    return bool(_POST_URL_RE.search(u))
+    return bool(_POST_URL_RE.search(u) or is_story_url(u))
 
 
 def normalize_username(name):
