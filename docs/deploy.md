@@ -6,7 +6,7 @@ Everything it remembers lives in `data/tiktok.db`, so the `data/` folder *is* th
 ## First install
 
 ```bash
-git clone https://github.com/QDarkRex/discord-media-downloader.git ~/tiktokbot
+git clone https://github.com/QDarkRex/Kabarine.git ~/tiktokbot
 cd ~/tiktokbot
 cp .env.example .env && chmod 600 .env
 nano .env                          # BOT_TOKEN; optionally IG_COOKIES / proxies

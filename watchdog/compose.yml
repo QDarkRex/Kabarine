@@ -13,4 +13,4 @@ services:
     read_only: true
     volumes:
       - ./watchdog.py:/app/watchdog.py:ro
-      - ../discord-media-downloader/data/health:/watch/media-bot:ro   # the bot's folder name
+      - ../kabarine/data/health:/watch/media-bot:ro   # the bot's folder name

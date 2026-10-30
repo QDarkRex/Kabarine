@@ -1,4 +1,8 @@
-# 📮 Repostman
+# 📮 Kabarine
+
+> *Kabar* is Indonesian for "news", and Erine is the author's oshi (favourite idol). So: the
+> bot that brings you news from the accounts you care about, named after the one account the
+> author cares about most.
 
 **A self-hosted Discord bot that delivers TikTok, Instagram and X posts to your server —
 including TikTok & Instagram stories.** It watches accounts you choose and reposts their new
@@ -47,8 +51,8 @@ You need Docker and a Discord bot token.
 3. Run it:
 
 ```bash
-git clone https://github.com/QDarkRex/discord-media-downloader.git repostman
-cd repostman
+git clone https://github.com/QDarkRex/Kabarine.git kabarine
+cd kabarine
 cp .env.example .env        # paste BOT_TOKEN
 docker compose up -d --build
 docker compose logs -f      # wait for "is online" and "synced 3 slash command(s)"
@@ -124,7 +128,7 @@ both of them work on this code.
 
 ## Credits: who we borrowed from
 
-Repostman isn't a GitHub fork of anything. It was written from scratch, but it stands on a
+Kabarine isn't a GitHub fork of anything. It was written from scratch, but it stands on a
 lot of other people's work:
 
 - **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** downloads TikTok videos and photo posts and

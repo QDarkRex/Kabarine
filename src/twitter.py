@@ -22,7 +22,7 @@ _URL_RE = re.compile(
     re.IGNORECASE,
 )
 _API = "https://api.fxtwitter.com/status/{}"
-_UA = {"User-Agent": "discord-media-downloader (+https://github.com/QDarkRex/discord-media-downloader)"}
+_UA = {"User-Agent": "Kabarine (+https://github.com/QDarkRex/Kabarine)"}
 _EXT = {"photo": ".jpg", "video": ".mp4", "gif": ".mp4"}
 
 

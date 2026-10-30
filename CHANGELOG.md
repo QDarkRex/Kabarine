@@ -2,7 +2,12 @@
 
 Reverse-chronological summary of what shipped. See `git log` for full detail.
 
-## 2026-10-30 (late) — Instagram story links
+## 2026-10-30 (late) — Kabarine
+
+- **Renamed** the repo `discord-media-downloader` → **Kabarine** (*kabar* "news" + Erine). GitHub
+  redirects the old URL.
+
+## 2026-10-30 (late, earlier) — Instagram story links
 
 - **Story links download on demand** — paste (or `/ig get`) `instagram.com/stories/<user>/<id>/`
   for that one story, `/stories/<user>/` for everything currently up, or a highlight link. Posted as
