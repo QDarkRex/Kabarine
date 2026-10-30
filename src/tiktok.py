@@ -95,14 +95,18 @@ def _base_opts(cookies=None, proxy=None):
     return opts
 
 
-def list_recent(username, count=5, cookies=None, proxy=None):
+def list_recent(username, count=5, cookies=None, proxy=None, sec_uid=None):
     """Flat-list a profile's recent videos WITHOUT downloading.
 
     Returns a list of {"id", "url"} dicts, most-recent first. May raise on
     network / extraction errors — callers handle that.
+
+    With sec_uid the listing goes through `tiktokuser:<sec_uid>`, which skips the
+    profile page that from the server fails with "Unable to extract secondary user ID"
+    for most accounts on any given try (35/54 at once, 2026-10-30; 0/54 this way).
     """
     username = normalize_username(username)
-    url = f"https://www.tiktok.com/@{username}"
+    url = f"tiktokuser:{sec_uid}" if sec_uid else f"https://www.tiktok.com/@{username}"
     opts = _base_opts(cookies, proxy)
     opts.update({
         "extract_flat": True,
@@ -118,7 +122,10 @@ def list_recent(username, count=5, cookies=None, proxy=None):
         vid = e.get("id")
         if not vid:
             continue
-        link = e.get("url") or f"https://www.tiktok.com/@{username}/video/{vid}"
+        # A tiktokuser: listing puts the secUid where the @handle goes in each entry's
+        # url — still downloadable, but it is also the link members see if a video is too
+        # big to upload, so build it from the handle instead.
+        link = (None if sec_uid else e.get("url")) or f"https://www.tiktok.com/@{username}/video/{vid}"
         out.append({"id": str(vid), "url": link})
     return out
 

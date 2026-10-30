@@ -5,6 +5,13 @@ Reverse-chronological summary of what shipped. See `git log` for full detail and
 
 ## 2026-10-30 — deployed from `deploy/ig-fixes-lean`
 
+- **TikTok video listing via secUid** — the poller lists `tiktokuser:<secUid>` instead of the @handle
+  profile page. Measured on the server, all 54 accounts back to back: @handle failed 35/54
+  ("Unable to extract secondary user ID"), secUid 0/54, identical videos in identical order. The
+  secUid comes from the same video page as the numeric id (cached in `tiktok_user_ids.sec_uid`,
+  column added in place); @handle is kept as the fallback. Links are rebuilt with the @handle, since
+  a tiktokuser: listing puts the secUid in each entry's url. `/tt add` retries its @handle read 3x.
+
 - **X / Twitter downloader** — `/x get <url>` and pasted links (only posts with media;
   `x_auto_detect_links`). Uses the public fxtwitter API: no login, original-resolution photos,
   highest-bitrate mp4. Posted through the shared `post_media` (batching, compression, link

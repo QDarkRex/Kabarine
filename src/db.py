@@ -27,12 +27,17 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 );
 """
 
-# Numeric TikTok user id per account, resolved once: story listing needs it to skip the
-# profile page TikTok answers 403 to from the server. See src/tiktok_story.py.
+# Per-account TikTok ids, resolved once from a video page and cached:
+#   user_id - numeric; story listing needs it to skip the profile page TikTok answers
+#             403 to from the server (src/tiktok_story.py).
+#   sec_uid - "MS4wLjABAAAA..."; video listing via `tiktokuser:<sec_uid>` skips the same
+#             profile page. Measured 2026-10-30, all 54 accounts at once: the @handle
+#             listing failed 35/54, tiktokuser:<sec_uid> 0/54, same videos in same order.
 _USER_IDS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS tiktok_user_ids (
     username TEXT PRIMARY KEY,
-    user_id  TEXT NOT NULL
+    user_id  TEXT NOT NULL,
+    sec_uid  TEXT
 );
 """
 
@@ -41,6 +46,10 @@ async def init_db(path):
     async with aiosqlite.connect(path) as db:
         await db.execute(_SCHEMA)
         await db.execute(_USER_IDS_SCHEMA)
+        # Tables created before sec_uid existed: add the column (rows get it lazily).
+        cur = await db.execute("PRAGMA table_info(tiktok_user_ids)")
+        if "sec_uid" not in {row[1] for row in await cur.fetchall()}:
+            await db.execute("ALTER TABLE tiktok_user_ids ADD COLUMN sec_uid TEXT")
         # Migrate the old TikTok-only `accounts` table (username, channel_id, guild_id,
         # last_seen_id, enabled) ONCE, then rename it out of the way. It used to be
         # re-run on every start, and INSERT OR IGNORE then quietly re-created every
@@ -91,24 +100,38 @@ async def remove_subscription(path, platform, username, channel_id=None, content
         return cur.rowcount
 
 
-async def get_user_id(path, username):
+async def get_ids(path, username):
+    """(user_id, sec_uid) cached for this account; either may be None."""
     async with aiosqlite.connect(path) as db:
-        cur = await db.execute("SELECT user_id FROM tiktok_user_ids WHERE username=?", (username,))
+        cur = await db.execute("SELECT user_id, sec_uid FROM tiktok_user_ids WHERE username=?",
+                               (username,))
         row = await cur.fetchone()
-        return row[0] if row else None
+        return (row[0], row[1]) if row else (None, None)
+
+
+async def set_ids(path, username, user_id, sec_uid=None):
+    """Cache an account's ids. A None sec_uid keeps whatever is already stored."""
+    async with aiosqlite.connect(path) as db:
+        await db.execute(
+            "INSERT INTO tiktok_user_ids (username, user_id, sec_uid) VALUES (?,?,?) "
+            "ON CONFLICT(username) DO UPDATE SET user_id=excluded.user_id, "
+            "sec_uid=COALESCE(excluded.sec_uid, tiktok_user_ids.sec_uid)",
+            (username, user_id, sec_uid))
+        await db.commit()
+
+
+async def get_user_id(path, username):
+    return (await get_ids(path, username))[0]
 
 
 async def set_user_id(path, username, user_id):
-    async with aiosqlite.connect(path) as db:
-        await db.execute("INSERT OR REPLACE INTO tiktok_user_ids (username, user_id) VALUES (?,?)",
-                         (username, user_id))
-        await db.commit()
+    await set_ids(path, username, user_id)
 
 
 async def known_video_id(path, username):
     """A video id already on record for this TikTok account (a video subscription's
-    marker), or None. Lets the story code read the numeric user id from one video page
-    instead of the profile listing, which fails often from the server."""
+    marker), or None. Lets the account's ids be read from one video page instead of the
+    profile listing, which fails often from the server."""
     async with aiosqlite.connect(path) as db:
         cur = await db.execute(
             "SELECT last_seen_id FROM subscriptions WHERE platform='tiktok' AND username=? "

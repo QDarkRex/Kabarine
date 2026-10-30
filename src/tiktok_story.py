@@ -37,22 +37,28 @@ _ITEM_TYPES = (2, 3, 6)
 _NO_STORY_MARKERS = ("Could not extract next cursor", "has no attribute 'exc'")
 
 
-def resolve_user_id(username, cookies=None, proxy=None, video_url=None):
-    """The account's numeric TikTok user id, read from one of its videos.
+def resolve_ids(username, cookies=None, proxy=None, video_url=None):
+    """(numeric user id, secUid) for the account, both read from one of its videos.
 
-    Pass video_url when one is already at hand (saves listing the profile again).
+    yt-dlp reports the numeric id as `uploader_id` and the secUid as `channel_id`. Pass
+    video_url when one is already at hand (saves listing the profile again).
     """
     if not video_url:
         recent = list_recent(username, 1, cookies, proxy)
         if not recent:
-            raise RuntimeError(f"@{username} has no videos to read its user id from")
+            raise RuntimeError(f"@{username} has no videos to read its ids from")
         video_url = recent[0]["url"]
     with yt_dlp.YoutubeDL(_base_opts(cookies, proxy)) as ydl:
-        info = ydl.extract_info(video_url, download=False)
-    user_id = str((info or {}).get("uploader_id") or "")
+        info = ydl.extract_info(video_url, download=False) or {}
+    user_id = str(info.get("uploader_id") or "")
     if not user_id.isdigit():
         raise RuntimeError(f"@{username}: video metadata has no numeric user id")
-    return user_id
+    return user_id, (info.get("channel_id") or None)
+
+
+def resolve_user_id(username, cookies=None, proxy=None, video_url=None):
+    """The account's numeric TikTok user id (see resolve_ids)."""
+    return resolve_ids(username, cookies, proxy, video_url)[0]
 
 
 def list_stories(user_id, username, cookies=None, proxy=None, timeout=90):

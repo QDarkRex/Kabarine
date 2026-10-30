@@ -11,9 +11,9 @@ Last updated: **2026-10-25**.
 
 - **Live server:** `x99` (moved off the caddy VPS), container `tiktokbot`, bot **Aerox Joget#4488**.
   Deployed from branch **`deploy/ig-fixes-lean`** (not `main`; the branch is local-only, not pushed).
-- **TikTok:** ~57 accounts monitored anonymously. About a third fail to list in any given sweep
-  ("Unable to extract secondary user ID") and succeed on a later one, so the poller often runs at its
-  8x backoff — new videos can lag ~20 min. Fix path not yet built: list via `tiktokuser:<secUid>`.
+- **TikTok:** ~55 accounts monitored anonymously. Videos are listed via `tiktokuser:<secUid>`
+  (2026-10-30): the @handle profile page failed for 35/54 accounts at once ("Unable to extract
+  secondary user ID"), the secUid listing for 0/54. The @handle listing is only the fallback now.
 - **TikTok stories:** gallery-dl based poller (2026-10-25) — see AGENTS.md §8. Story subscriptions are
   opt-in per account (`/tt add type:stories|both`).
 - **Instagram:** downloader-only (`ig_monitoring_enabled: false`). As of 2026-10-25 the burner's IG
@@ -49,8 +49,8 @@ false) — do not merge `f58e45a` into the deployed branch.
 3. **Scale Instagram to ~45 accounts:** add an **ISP (static residential) proxy** and wire the 2nd burner:
    `IG_COOKIES=/bot/data/ig_cookies.txt,/bot/data/ig_cookies2.txt` + `IG_PROXIES=<proxy>`.
    `data/ig_cookies2.txt` is already uploaded. See AGENTS.md §3.
-4. **TikTok listing reliability** — switch `list_recent` to `tiktokuser:<secUid>` (the ids are already
-   resolvable; see `tiktok_story.resolve_user_id`) to cut the per-sweep failures and the 8x backoff.
+4. **`/tt add` still needs one @handle listing** (no secUid exists yet for a new account), so it is
+   retried 3x but can still refuse a valid account; running it again usually works.
 5. **Server migration** (VPS → local box): copy the whole `~/tiktokbot` folder **including `data/`**, then
    `docker compose up -d --build`. All state is in `data/tiktok.db`; nothing to re-add. Stop the old
    instance first (same bot token can't run twice).

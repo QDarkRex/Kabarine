@@ -80,13 +80,20 @@ class Tracking(commands.Cog):
         mtype, mid = mentions.parse_target(tag)
         kind = type.value if type else "post"
         # Seed baseline = current newest id, so we don't dump the back-catalogue. This
-        # listing also proves the account exists and gives stories a video to read the
-        # numeric user id from.
-        try:
-            recent = await asyncio.to_thread(tiktok.list_recent, username, 1,
-                                             self.bot.cookies, self.bot.proxy)
-        except Exception as e:
-            log.warning("add: couldn't read @%s (%s)", username, _short(e))
+        # listing also proves the account exists and gives a video to read its ids from.
+        # It has to go through the @handle page (no secUid yet), which fails on most
+        # single tries from the server — so try a few times before refusing.
+        recent, err = None, None
+        for attempt in range(3):
+            try:
+                recent = await asyncio.to_thread(tiktok.list_recent, username, 1,
+                                                 self.bot.cookies, self.bot.proxy)
+                break
+            except Exception as e:
+                err = e
+                await asyncio.sleep(2)
+        if recent is None:
+            log.warning("add: couldn't read @%s (%s)", username, _short(err))
             await interaction.followup.send(
                 f"❌ Couldn't read **@{username}**. Check the spelling and that the account is public.",
                 ephemeral=True)
@@ -125,30 +132,37 @@ class Tracking(commands.Cog):
             return None
         return stories[0]["id"] if stories else "0"
 
-    async def _user_id(self, username, video_url=None):
-        """Numeric user id for story listing: cached, else read from one video page, else
-        from a fresh profile listing. The video page comes first because the profile
-        listing fails for ~40% of accounts per attempt from the server, while a single
-        video page reads reliably; a video id is usually on record from the video
-        subscription."""
-        user_id = await db.get_user_id(self.bot.db_path, username)
-        if user_id:
-            return user_id
+    async def _ids(self, username, video_url=None):
+        """(numeric user id, secUid): cached, else read from one video page, else from a
+        fresh profile listing. The video page comes first because the profile listing
+        fails for most accounts on any given try from the server, while a single video
+        page reads reliably; a video id is usually on record from the video subscription.
+        Both ids come from the same page, so a row cached before secUid existed is
+        topped up the first time it is needed."""
+        user_id, sec_uid = await db.get_ids(self.bot.db_path, username)
+        if user_id and sec_uid:
+            return user_id, sec_uid
         if not video_url:
             vid = await db.known_video_id(self.bot.db_path, username)
             if vid:
                 video_url = f"https://www.tiktok.com/@{username}/video/{vid}"
         try:
-            user_id = await asyncio.to_thread(tiktok_story.resolve_user_id, username,
-                                              self.bot.cookies, self.bot.proxy, video_url)
+            user_id, sec_uid = await asyncio.to_thread(tiktok_story.resolve_ids, username,
+                                                       self.bot.cookies, self.bot.proxy, video_url)
         except Exception:
             if not video_url:
                 raise
             # That video may have been deleted — fall back to the profile listing.
-            user_id = await asyncio.to_thread(tiktok_story.resolve_user_id, username,
-                                              self.bot.cookies, self.bot.proxy)
-        await db.set_user_id(self.bot.db_path, username, user_id)
-        return user_id
+            user_id, sec_uid = await asyncio.to_thread(tiktok_story.resolve_ids, username,
+                                                       self.bot.cookies, self.bot.proxy)
+        await db.set_ids(self.bot.db_path, username, user_id, sec_uid)
+        return user_id, sec_uid
+
+    async def _user_id(self, username, video_url=None):
+        """Numeric id only (the story path). A cached one is enough — don't make story
+        checks depend on also resolving the secUid, which only video listing needs."""
+        user_id, _sec = await db.get_ids(self.bot.db_path, username)
+        return user_id or (await self._ids(username, video_url))[0]
 
     @tt.command(name="remove", description="Stop tracking a TikTok account")
     @app_commands.describe(username="TikTok @username", channel="Only this channel (default: everywhere)",
@@ -277,15 +291,33 @@ class Tracking(commands.Cog):
             log.info("poll: recovered — easing back (spacing x%.1f)", self._backoff)
 
     async def _check_account(self, username, subs):
-        """Returns True if the listing succeeded (even if no new videos), False if it failed."""
+        """Returns True if the listing succeeded (even if no new videos), False if it failed.
+
+        Lists through the account's secUid (tiktokuser:), which skips the profile page
+        that fails for most accounts from the server; falls back to the @handle listing
+        when the secUid isn't known yet or its listing fails.
+        """
         scan = int(self.bot.cfg.get("playlist_scan_count", 5))
         try:
-            recent = await asyncio.to_thread(tiktok.list_recent, username, scan,
-                                             self.bot.cookies, self.bot.proxy)
-        except Exception as e:
-            # Expected occasionally cookie-free (rate-limits, JS challenge, cache lag).
-            log.warning("poll: couldn't list @%s (%s)", username, _short(e))
-            return False
+            _uid, sec_uid = await self._ids(username)
+        except Exception:
+            sec_uid = None          # no readable video yet — the @handle listing still might work
+        recent = None
+        if sec_uid:
+            try:
+                recent = await asyncio.to_thread(tiktok.list_recent, username, scan,
+                                                 self.bot.cookies, self.bot.proxy, sec_uid)
+            except Exception as e:
+                log.info("poll: secUid listing failed for @%s (%s); trying @handle",
+                         username, _short(e))
+        if recent is None:
+            try:
+                recent = await asyncio.to_thread(tiktok.list_recent, username, scan,
+                                                 self.bot.cookies, self.bot.proxy)
+            except Exception as e:
+                # Expected occasionally cookie-free (rate-limits, JS challenge, cache lag).
+                log.warning("poll: couldn't list @%s (%s)", username, _short(e))
+                return False
         await monitor.forward_new(self.bot, "tiktok", username, subs, recent, handle_url,
                                   self._workdir(), self.bot.cookies, self.bot.proxy, "TikTok",
                                   headline=f"🎬 **TikTok Post** · **@{username}**")
