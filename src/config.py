@@ -42,6 +42,15 @@ DEFAULTS = {
     # stream it forever, leak the worker thread and fill the disk)
     "tiktok_download_timeout": 180,   # abort a TikTok download running longer than this
     "max_download_mb": 300,           # abort a TikTok download bigger than this
+    # Health alerts (src/health.py) — DM the bot's owner (or a channel) when forwarding breaks
+    "health_alert_enabled": True,
+    "health_alert_channel_id": None,  # None = DM the owner of this Discord application
+    "health_stall_minutes": 60,       # a poller that finishes no sweep for this long is stuck
+    "health_fail_ratio": 0.5,         # a sweep is "bad" when at least this share of accounts failed
+    "health_fail_sweeps": 3,          # ...and this many bad sweeps in a row raise an alert
+    "health_forward_failures": 5,     # consecutive failed forwards (download/upload) before alerting
+    "health_quiet_hours": 24,         # nothing forwarded at all for this long = suspicious
+    "health_repeat_hours": 6,         # re-send an ongoing alert this often
     # Upload handling
     "max_upload_mb": 10,         # Discord free-tier upload cap (~10 MB)
     "compress_oversize": True,   # ffmpeg-compress videos over the cap before falling back to a link

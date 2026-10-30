@@ -187,7 +187,10 @@ async def handle_url(channel, url, cfg, cookies, workdir, proxy=None):
     except tiktok.LiveContentError:
         raise
     except Exception as e:
-        if "no video formats" in str(e).lower():   # a photo post behind a short link
+        msg = str(e).lower()
+        # A photo post behind a short link: yt-dlp either finds "no video formats", or
+        # follows the redirect to /photo/<id>?_r=1&_t=... and calls that URL unsupported.
+        if "no video formats" in msg or ("unsupported url" in msg and tiktok.is_photo_url(msg)):
             return await _handle_photos(channel, url, cfg, cookies, workdir, proxy)
         raise
 

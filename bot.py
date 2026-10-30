@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from src import db
 from src.config import load_config
+from src.health import HealthMonitor
 from src.log import get_logger, setup_logging
 
 load_dotenv()
@@ -61,6 +62,18 @@ def _resolve_ig_burners():
     return burners
 
 
+async def _summary(bot):
+    """One line for the startup notice: what is being watched."""
+    def count(rows):
+        return len({r[0] for r in rows})
+    tv = count(await db.get_enabled(bot.db_path, "tiktok", "post"))
+    ts = count(await db.get_enabled(bot.db_path, "tiktok", "story"))
+    ig = count(await db.get_enabled(bot.db_path, "instagram", "post")
+               + await db.get_enabled(bot.db_path, "instagram", "story"))
+    ig_state = "dipantau" if bot.cfg.get("ig_monitoring_enabled", True) and bot.ig_burners else "pemantauan mati"
+    return f"TikTok {tv} akun video / {ts} akun story, Instagram {ig} akun ({ig_state})"
+
+
 async def _run():
     setup_logging()
     cfg = load_config()
@@ -88,6 +101,7 @@ async def _run():
     # On-demand /ig get + paste-detect use the first burner (any will do).
     bot.ig_cookies = bot.ig_burners[0]["cookies"] if bot.ig_burners else None
     bot.ig_proxy = bot.ig_burners[0]["proxy"] if bot.ig_burners else None
+    bot.health = HealthMonitor(bot)
 
     @bot.event
     async def on_ready():
@@ -97,6 +111,9 @@ async def _run():
             log.info("synced %d slash command(s)", len(synced))
         except Exception:
             log.exception("slash command sync failed")
+        if bot.health._task is None:  # on_ready fires again after every reconnect
+            bot.health.start()
+            await bot.health.startup_report(await _summary(bot))
 
     async with bot:
         for fn in sorted(os.listdir("./cogs")):

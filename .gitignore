@@ -7,3 +7,4 @@ __pycache__/
 .venv/
 venv/
 *.tar.gz
+.pytest_cache/

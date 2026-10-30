@@ -258,6 +258,7 @@ class Instagram(commands.Cog):
     async def _run_poller(self, bi):
         await self.bot.wait_until_ready()
         log.info("instagram poller %d alive (of %d burner(s))", bi, len(self.bot.ig_burners))
+        self.bot.health.register(f"instagram[{bi}]")
         while not self.bot.is_closed():
             try:
                 await self._one_sweep(bi)
@@ -283,6 +284,7 @@ class Instagram(commands.Cog):
 
         users = set(posts_by) | set(stories_by)
         if not users:
+            self.bot.health.sweep(f"instagram[{bi}]", 0, 0)
             await asyncio.sleep(30)
             return
 
@@ -293,6 +295,7 @@ class Instagram(commands.Cog):
                                              stories_by.get(username), cookies, proxy):
                 failures += 1
             await asyncio.sleep(self._jittered(spacing))
+        self.bot.health.sweep(f"instagram[{bi}]", len(users) - failures, len(users))
 
         if failures / len(users) >= 0.3:
             self._backoff[bi] = min(self._backoff[bi] * 2, 8.0)
@@ -362,9 +365,11 @@ class Instagram(commands.Cog):
                     except Exception as e:
                         log.warning("ig story forward failed @%s %s (%s); retry next sweep",
                                     username, sid, _short(e))
+                        self.bot.health.forward_failed()
                         _cleanup(scratch)
                         break
                     _cleanup(scratch)
+                    self.bot.health.forwarded()
                     await db.update_last_seen(self.bot.db_path, "instagram", username,
                                               channel_id, sid, "story")
                     log.info("forwarded Instagram story @%s %s -> channel %s", username, sid, channel_id)

@@ -62,7 +62,7 @@ class Tracking(commands.Cog):
     # ---- commands ---------------------------------------------------------
 
     @tt.command(name="add", description="Track a TikTok account and post its new videos and/or stories")
-    @app_commands.describe(username="TikTok @username",
+    @app_commands.describe(username="TikTok @username, or a link to one of its videos (more reliable)",
                            channel="Where to post (default: this channel/thread)",
                            tag="Optional role or person to ping on each new item",
                            type="What to forward (default: videos)")
@@ -75,22 +75,35 @@ class Tracking(commands.Cog):
                   channel: Optional[Target] = None, tag: Optional[Tag] = None,
                   type: Optional[app_commands.Choice[str]] = None):
         await interaction.response.defer(ephemeral=True)
-        if not tiktok.is_valid_username(username):
+        link = tiktok.post_link(username)
+        if link:
+            username, video_url = link
+        elif tiktok.is_valid_username(username):
+            username, video_url = tiktok.normalize_username(username), None
+        else:
             await interaction.followup.send(
-                "❌ That isn't a TikTok username. Type the handle itself, e.g. `indahjkt48` — "
-                "choosing a role or member from Discord's @ list turns it into a mention.",
+                "❌ That isn't a TikTok username. Type the handle itself, e.g. `indahjkt48`, or "
+                "paste a full link to one of its videos — choosing a role or member from "
+                "Discord's @ list turns it into a mention.",
                 ephemeral=True)
             return
-        username = tiktok.normalize_username(username)
         target = channel or interaction.channel
         mtype, mid = mentions.parse_target(tag)
         kind = type.value if type else "post"
         # Seed baseline = current newest id, so we don't dump the back-catalogue. This
         # listing also proves the account exists and gives a video to read its ids from.
-        # It has to go through the @handle page (no secUid yet), which fails on most
+        # Given a video link, its page yields the secUid and the listing goes through
+        # that. Otherwise it has to go through the @handle page, which fails on most
         # single tries from the server — so try a few times before refusing.
         recent, err = None, None
-        for attempt in range(3):
+        if video_url:
+            try:
+                _uid, sec_uid = await self._ids(username, video_url)
+                recent = await asyncio.to_thread(tiktok.list_recent, username, 1,
+                                                 self.bot.cookies, self.bot.proxy, sec_uid)
+            except Exception as e:
+                err = e
+        for attempt in range(0 if recent is not None else 3):
             try:
                 recent = await asyncio.to_thread(tiktok.list_recent, username, 1,
                                                  self.bot.cookies, self.bot.proxy)
@@ -256,6 +269,7 @@ class Tracking(commands.Cog):
     async def _run_poller(self):
         await self.bot.wait_until_ready()
         log.info("tiktok poller alive (paced scheduler)")
+        self.bot.health.register("tiktok-video")
         while not self.bot.is_closed():
             try:
                 await self._one_sweep()
@@ -277,6 +291,7 @@ class Tracking(commands.Cog):
         for username, channel_id, mtype, mid, last_seen in rows:
             by_user[username].append((channel_id, mtype, mid, last_seen))
         if not by_user:
+            self.bot.health.sweep("tiktok-video", 0, 0)
             await asyncio.sleep(10)  # nothing tracked yet — idle, don't busy-loop
             return
 
@@ -286,6 +301,7 @@ class Tracking(commands.Cog):
             if not await self._check_account(username, subs):
                 failures += 1
             await asyncio.sleep(self._jittered(spacing))
+        self.bot.health.sweep("tiktok-video", len(by_user) - failures, len(by_user))
 
         # Adapt for next sweep based on how many accounts refused us.
         if failures / len(by_user) >= 0.3:
@@ -337,6 +353,7 @@ class Tracking(commands.Cog):
             log.info("tiktok story poller disabled (tiktok_story_enabled=false)")
             return
         log.info("tiktok story poller alive")
+        self.bot.health.register("tiktok-story")
         while not self.bot.is_closed():
             try:
                 await self._story_sweep()
@@ -353,23 +370,28 @@ class Tracking(commands.Cog):
         for username, channel_id, mtype, mid, last_seen in rows:
             by_user[username].append((channel_id, mtype, mid, last_seen))
         if not by_user:
+            self.bot.health.sweep("tiktok-story", 0, 0)
             await asyncio.sleep(30)  # no story subscriptions — idle, don't busy-loop
             return
         target = float(self.bot.cfg.get("tiktok_story_sweep_seconds", 600))
         floor = float(self.bot.cfg.get("tiktok_story_min_spacing", 3))
         spacing = max(floor, target / len(by_user))
+        failures = 0
         for username, subs in by_user.items():
-            await self._check_stories(username, subs)
+            if not await self._check_stories(username, subs):
+                failures += 1
             await asyncio.sleep(self._jittered(spacing))
+        self.bot.health.sweep("tiktok-story", len(by_user) - failures, len(by_user))
 
     async def _check_stories(self, username, subs):
+        """Returns True if the stories could be read (even if none are up), False if not."""
         try:
             user_id = await self._user_id(username)
             stories = await asyncio.to_thread(tiktok_story.list_stories, user_id, username,
                                               self.bot.cookies, self.bot.proxy)
         except Exception as e:
             log.warning("stories: couldn't check @%s (%s)", username, _short(e))
-            return
+            return False
         if not stories:
             # A successful "nothing up" read is a baseline too: without it, a subscription
             # whose add-time read failed would SEED (skip) its first real story.
@@ -377,11 +399,12 @@ class Tracking(commands.Cog):
                 if last_seen is None:
                     await db.update_last_seen(self.bot.db_path, "tiktok", username, channel_id,
                                               "0", "story")
-            return
+            return True
         await monitor.forward_new(self.bot, "tiktok", username, subs, stories, handle_url,
                                   self._workdir(), self.bot.cookies, self.bot.proxy, "TikTok",
                                   content_type="story", noun="story", by_id=True,
                                   headline=f"📖 **TikTok Story** · **@{username}**")
+        return True
 
 
 async def setup(bot):

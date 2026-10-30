@@ -50,6 +50,19 @@ tiktok_native: true       # true = native resolution even if h265 1080p (may not
 tiktok_download_timeout: 180   # abort a TikTok download running longer than this (seconds)
 max_download_mb: 300           # abort a TikTok download bigger than this
 
+# Health alerts — the bot DMs its owner (or posts in health_alert_channel_id) when
+# forwarding breaks: a stuck poller, most accounts unreadable (often a yt-dlp/gallery-dl
+# that needs upgrading — the alert says so), repeated failed forwards, or nothing at all
+# forwarded for a day. Sends a short notice on every start, and a recovery message.
+health_alert_enabled: true
+health_alert_channel_id:        # empty = DM the owner of this bot's Discord application
+health_stall_minutes: 60
+health_fail_ratio: 0.5
+health_fail_sweeps: 3
+health_forward_failures: 5
+health_quiet_hours: 24
+health_repeat_hours: 6
+
 # Upload handling
 max_upload_mb: 50         # Discord Level 2 boost upload cap (~50 MB) — bigger cap = higher native res, less compression
 compress_oversize: true   # try ffmpeg compression before falling back to a link

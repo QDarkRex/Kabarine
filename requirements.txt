@@ -1,7 +1,12 @@
 discord.py==2.7.1
-yt-dlp>=2025.1.1
-gallery-dl>=1.28.0   # Instagram /ig downloads (photos + videos + carousels)
-requests>=2.31.0     # cookie-free public-mirror fallback for /ig (download_via_proxy)
+# The two extractors are PINNED to the versions last verified live. Every rebuild used
+# to pull whatever was newest, and the story poller relies on gallery-dl internals —
+# so a surprise upgrade could break forwarding silently. Upgrade on purpose: when the
+# health alert reports most accounts failing, it names the newer versions on PyPI;
+# bump them here, rebuild, and watch the next sweep.
+yt-dlp==2026.10.26
+gallery-dl==1.32.18   # Instagram /ig downloads + TikTok story listing
+requests==2.34.2      # cookie-free public-mirror fallback for /ig (download_via_proxy)
 aiosqlite==0.20.0
 python-dotenv==1.0.1
 PyYAML==6.0.1

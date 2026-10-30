@@ -73,6 +73,16 @@ def normalize_username(name):
 _USERNAME_RE = re.compile(r"[a-z0-9._]{2,24}")
 
 
+def post_link(text):
+    """(username, canonical video URL) for a full TikTok post link, else None. Lets
+    /tt add take a link: one video page reads reliably, the @handle page often doesn't."""
+    m = _POST_ID_RE.search(text or "")
+    if not m or not m.group(1):
+        return None
+    user = normalize_username(m.group(1))
+    return user, "https://www.tiktok.com/@%s/video/%s" % (user, m.group(2))
+
+
 def is_valid_username(name):
     """False for anything that can't be a TikTok handle — notably a Discord mention.
     Picking "@Indah" from Discord's @ menu in /tt add stored the role mention as the

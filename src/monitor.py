@@ -70,7 +70,9 @@ async def forward_new(bot, platform, username, subs, recent, handle_url,
             except Exception as e:
                 log.warning("poll: forward failed for @%s %s (%s); will retry next sweep",
                             username, item["id"], _short(e))
+                bot.health.forward_failed()
                 break
+            bot.health.forwarded()
             await db.update_last_seen(bot.db_path, platform, username, channel_id, item["id"],
                                       content_type)
             log.info("forwarded %s @%s %s -> channel %s", what, username, item["id"], channel_id)
