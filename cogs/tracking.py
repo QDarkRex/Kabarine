@@ -287,7 +287,8 @@ class Tracking(commands.Cog):
             log.warning("poll: couldn't list @%s (%s)", username, _short(e))
             return False
         await monitor.forward_new(self.bot, "tiktok", username, subs, recent, handle_url,
-                                  self._workdir(), self.bot.cookies, self.bot.proxy, "TikTok")
+                                  self._workdir(), self.bot.cookies, self.bot.proxy, "TikTok",
+                                  headline=f"🎬 **TikTok Post** · **@{username}**")
         return True
 
     # ---- story poller -----------------------------------------------------
@@ -341,7 +342,8 @@ class Tracking(commands.Cog):
             return
         await monitor.forward_new(self.bot, "tiktok", username, subs, stories, handle_url,
                                   self._workdir(), self.bot.cookies, self.bot.proxy, "TikTok",
-                                  content_type="story", noun="story", by_id=True)
+                                  content_type="story", noun="story", by_id=True,
+                                  headline=f"📖 **TikTok Story** · **@{username}**")
 
 
 async def setup(bot):

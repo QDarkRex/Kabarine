@@ -17,7 +17,8 @@ DEFAULTS = {
     "tiktok_story_sweep_seconds": 600,   # aim to re-check each story subscription this often
     "tiktok_story_min_spacing": 3,       # never fire story requests faster than this (seconds)
     # On-demand
-    "auto_detect_links": True,       # auto-download TikTok/Instagram links pasted in chat
+    "auto_detect_links": True,       # auto-download TikTok/Instagram/X links pasted in chat
+    "x_auto_detect_links": True,     # X links only (on top of auto_detect_links); text-only tweets are ignored
     "suppress_link_embeds": True,    # remove Discord's auto link-preview embed once the bot reposts it
     # Instagram (/ig)
     "download_timeout": 180,     # kill a gallery-dl download that runs longer than this (seconds)

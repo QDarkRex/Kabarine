@@ -17,7 +17,8 @@ tiktok_story_sweep_seconds: 600     # re-check each story subscription roughly t
 tiktok_story_min_spacing: 3         # never request faster than this (seconds)
 
 # On-demand
-auto_detect_links: true      # auto-download TikTok/Instagram links pasted in chat
+auto_detect_links: true      # auto-download TikTok/Instagram/X links pasted in chat
+x_auto_detect_links: true    # X/Twitter links only; posts WITHOUT media are ignored (people share X links a lot)
 suppress_link_embeds: true   # remove Discord's auto link-preview embed after the bot reposts it (needs "Manage Messages")
 
 # Instagram (/ig command)

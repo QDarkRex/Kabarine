@@ -1,22 +1,29 @@
 # discord-media-downloader
 
-A small, self-hosted Discord bot that brings TikTok and Instagram media into your server:
+A small, self-hosted Discord bot that brings TikTok, Instagram and X media into your server:
 
-- **TikTok** — monitor accounts and auto-forward their new videos to a channel/thread,
-  **plus** paste-a-link on-demand downloads. Watermark-free, H.264 so Discord plays inline.
+- **TikTok** — monitor accounts and auto-forward their new videos **and stories** to a
+  channel/thread, each labelled as a post or a story, **plus** paste-a-link on-demand
+  downloads. Watermark-free.
+- **X / Twitter** — on-demand downloads (`/x get`, or paste a link) of a post's photos at
+  original resolution and its videos at the best available quality. No login needed.
 - **Instagram** — on-demand downloads (`/ig get`) of any post / reel / **carousel** (photos
   *and* videos) at **native resolution**, **plus** monitoring of new **posts and stories**.
 - **Tag on new content** — optionally ping a role or person when a tracked account posts.
 
 Built with Python + [discord.py](https://github.com/Rapptz/discord.py), packaged as a single
-Docker container. Engines: [yt-dlp](https://github.com/yt-dlp/yt-dlp) (TikTok) and
-[gallery-dl](https://github.com/mikf/gallery-dl) (Instagram).
+Docker container. Engines: [yt-dlp](https://github.com/yt-dlp/yt-dlp) (TikTok videos),
+[gallery-dl](https://github.com/mikf/gallery-dl) (Instagram, TikTok story listing) and the
+public [fxtwitter](https://github.com/FixTweet/FxTwitter) API (X).
 
 ## Features
 
-- **`/tt` group** — `add` / `remove` / `list` / `get <url>`. `add` takes an optional `tag`
-  (role/person to ping) and can target a thread. A paced scheduler sweeps all tracked
-  accounts evenly with adaptive backoff and optional proxy support.
+- **`/tt` group** — `add` / `remove` / `list` / `get <url>`. `add` takes `type:` videos |
+  stories | both, an optional `tag` (role/person to ping) and can target a thread. A paced
+  scheduler sweeps all tracked accounts evenly with adaptive backoff and optional proxy
+  support; stories have their own, slower poller.
+- **`/x get <url>`** — download an X post's photos/videos. Pasted X links are handled too,
+  but only for posts that have media (`x_auto_detect_links` toggles this on its own).
 - **`/ig` group** — `get <url>` (on-demand), plus `add` / `remove` / `list` to forward an
   account's new **posts and/or stories** (`type:` posts | stories | both), with the same
   `tag` + thread options. Monitoring is sharded across one or more burner logins

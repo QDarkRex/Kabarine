@@ -42,7 +42,11 @@ async def init_db(path):
         await db.execute(_SCHEMA)
         await db.execute(_USER_IDS_SCHEMA)
         # Migrate the old TikTok-only `accounts` table (username, channel_id, guild_id,
-        # last_seen_id, enabled) if it exists. INSERT OR IGNORE keeps this idempotent.
+        # last_seen_id, enabled) ONCE, then rename it out of the way. It used to be
+        # re-run on every start, and INSERT OR IGNORE then quietly re-created every
+        # subscription removed since the migration — /tt remove was undone by the next
+        # restart (seen 2026-10-26: two deleted accounts came back with their old
+        # markers). The renamed table is kept as a backup.
         cur = await db.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='accounts'")
         if await cur.fetchone():
@@ -51,6 +55,7 @@ async def init_db(path):
                 "(platform, username, channel_id, guild_id, content_type, last_seen_id, enabled) "
                 "SELECT 'tiktok', username, channel_id, guild_id, 'post', last_seen_id, enabled "
                 "FROM accounts")
+            await db.execute("ALTER TABLE accounts RENAME TO accounts_migrated_backup")
         await db.commit()
 
 

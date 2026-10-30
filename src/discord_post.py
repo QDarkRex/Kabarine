@@ -6,6 +6,7 @@ nothing is ever silently dropped.
 """
 import asyncio
 import os
+import re
 import shutil
 
 import discord
@@ -24,9 +25,16 @@ def _size_mb(path):
     return os.path.getsize(path) / (1024 * 1024)
 
 
+# yt-dlp's stand-in title for a TikTok with no description. On a story it read as
+# "TikTok video #…", which made stories look like ordinary videos — drop it.
+_PLACEHOLDER_TITLE = re.compile(r"TikTok video #\d+", re.IGNORECASE)
+
+
 def _caption(info):
     uploader = info.get("uploader") or ""
     title = (info.get("title") or "").strip()
+    if _PLACEHOLDER_TITLE.fullmatch(title):
+        title = ""
     head = f"**@{uploader}**" if uploader else ""
     if title:
         if len(title) > 280:

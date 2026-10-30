@@ -16,7 +16,7 @@ def _short(e):
 
 async def forward_new(bot, platform, username, subs, recent, handle_url,
                       workdir, cookies, proxy, label, content_type="post", noun="post",
-                      by_id=False):
+                      by_id=False, headline=None):
     """subs:   list of (channel_id, mention_type, mention_id, last_seen)
     recent:    [{"id", "url"}, ...] most-recent first
     handle_url: async (channel, url, cfg, cookies, workdir, proxy) -> ...
@@ -26,6 +26,9 @@ async def forward_new(bot, platform, username, subs, recent, handle_url,
                the marker in the list". Needed for stories: the story a marker points at
                expires after 24h, and walking until it is found would then re-send every
                story still up. Only valid for time-ordered numeric ids (TikTok's are).
+    headline:  if given, this line is posted above EVERY forwarded item (with the ping
+               prepended when the subscription has one), so members can tell what kind of
+               item it is. Without it, the line is only posted when there is a ping.
     """
     if not recent:
         return
@@ -60,9 +63,9 @@ async def forward_new(bot, platform, username, subs, recent, handle_url,
         what = label if noun == "post" else f"{label} {noun}"
         for item in reversed(new_items):    # oldest-first
             try:
-                if mtype:
+                if mtype or headline:
                     await mentions.announce(channel, mtype, mid,
-                                            f"new {label} {noun} from **@{username}**")
+                                            headline or f"new {label} {noun} from **@{username}**")
                 await handle_url(channel, item["url"], bot.cfg, cookies, workdir, proxy)
             except Exception as e:
                 log.warning("poll: forward failed for @%s %s (%s); will retry next sweep",

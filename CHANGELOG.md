@@ -3,6 +3,20 @@
 Reverse-chronological summary of what shipped. See `git log` for full detail and
 [`STATUS.md`](STATUS.md) for what is currently deployed vs. pending.
 
+## 2026-10-30 — deployed from `deploy/ig-fixes-lean`
+
+- **X / Twitter downloader** — `/x get <url>` and pasted links (only posts with media;
+  `x_auto_detect_links`). Uses the public fxtwitter API: no login, original-resolution photos,
+  highest-bitrate mp4. Posted through the shared `post_media` (batching, compression, link
+  fallback).
+- **TikTok items are always labelled** — a "🎬 TikTok Post" / "📖 TikTok Story" line goes above
+  every forwarded item (`monitor.forward_new(headline=...)`), with the subscription's ping in
+  front when it has one. yt-dlp's placeholder title "TikTok video #<id>" is no longer used as a
+  caption — it made stories look like videos. Instagram is unchanged.
+- **Removed subscriptions came back on restart (fix)** — `init_db` re-ran the old `accounts`
+  migration on every start, and `INSERT OR IGNORE` re-created everything deleted since. It now
+  runs once and renames the table to `accounts_migrated_backup`.
+
 ## 2026-10-25 — deployed from `deploy/ig-fixes-lean`
 
 - **TikTok story auto-forward** — `/tt add type:stories|both`. yt-dlp can't list stories, but gallery-dl's
