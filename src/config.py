@@ -52,6 +52,7 @@ DEFAULTS = {
     "health_forward_failures": 5,     # consecutive failed forwards (download/upload) before alerting
     "health_quiet_hours": 24,         # nothing forwarded at all for this long = suspicious
     "health_repeat_hours": 6,         # re-send an ongoing alert this often
+    "health_disk_free_gb": 5,         # alert when the disk holding DATA_PATH has less free space
     # Upload handling
     "max_upload_mb": 10,         # Discord free-tier upload cap (~10 MB)
     "compress_oversize": True,   # ffmpeg-compress videos over the cap before falling back to a link

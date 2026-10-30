@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from src import db
 from src.config import load_config
-from src.health import HealthMonitor
+from src.health import HealthMonitor, sweep_downloads
 from src.log import get_logger, setup_logging
 
 load_dotenv()
@@ -84,6 +84,10 @@ async def _run():
 
     data_path = os.getenv("DATA_PATH", "./data")
     os.makedirs(os.path.join(data_path, "downloads"), exist_ok=True)
+    # Nothing is downloading yet, so whatever is left there was interrupted last run.
+    stale = sweep_downloads(os.path.join(data_path, "downloads"), 0)
+    if stale:
+        log.info("removed %d leftover item(s) from downloads/", stale)
     db_path = os.path.join(data_path, "tiktok.db")
     await db.init_db(db_path)
 

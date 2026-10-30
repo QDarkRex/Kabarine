@@ -277,6 +277,10 @@ See [docs/deploy.md](docs/deploy.md). Container `tiktokbot`, `data/` bind-mounte
   `health_fail_ratio` unreadable accounts (alert names installed vs PyPI yt-dlp/gallery-dl), a streak of
   `health_forward_failures` failed forwards, and nothing forwarded for `health_quiet_hours`. One alert per
   problem, repeated every `health_repeat_hours`, plus recovery. Wording: `alert_language` (en/id).
+  Also: less than `health_disk_free_gb` free on DATA_PATH's disk, and every check deletes anything in
+  `data/downloads` older than 2 h (`sweep_downloads`; bot start wipes it completely). Downloads are temp
+  files; 1.3 GB of interrupted ones (a 68-min TikTok, a 4K X clip, 48-byte `_c.mp4` ffmpeg stubs) piled up
+  unnoticed Jul-Oct 2026 before this existed.
 - Each check writes `data/health/heartbeat.json`. `watchdog/` runs separately and alerts when that file
   goes stale — the only way to hear about a stopped/hung container, since the bot can't report its own death.
 - Neither can see the whole host going down; that needs a check from another machine.

@@ -190,3 +190,32 @@ def test_english_wording():
         h.forward_failed()
     run(h.check())
     assert "5 forwards in a row failed" in sent[0]
+
+
+def test_disk_alert_and_recovery(monkeypatch):
+    h, sent, _advance = make(health_disk_free_gb=5)
+    usage = [types.SimpleNamespace(total=100 * 1024 ** 3, used=0, free=2 * 1024 ** 3)]
+    monkeypatch.setattr(health.shutil, "disk_usage", lambda p: usage[0])
+    run(h.check())
+    assert len(sent) == 1 and "hampir penuh" in sent[0] and "2.0 GB" in sent[0]
+    run(h.check())
+    assert len(sent) == 1                       # no repeat inside health_repeat_hours
+    usage[0] = types.SimpleNamespace(total=100 * 1024 ** 3, used=0, free=40 * 1024 ** 3)
+    run(h.check())
+    assert sent[-1].startswith("✅") and "40.0 GB" in sent[-1]
+
+
+def test_sweep_downloads_removes_only_old_entries(tmp_path):
+    import time as _time
+    d = tmp_path / "downloads"
+    (d / "x_old").mkdir(parents=True)
+    (d / "x_old" / "a.mp4").write_bytes(b"x")
+    (d / "old_c.mp4").write_bytes(b"x")
+    (d / "fresh.mp4").write_bytes(b"x")
+    past = _time.time() - 3 * 3600
+    for p in (d / "x_old", d / "old_c.mp4"):
+        os.utime(p, (past, past))
+    assert health.sweep_downloads(str(d), health.DOWNLOAD_MAX_AGE) == 2
+    assert sorted(os.listdir(d)) == ["fresh.mp4"]
+    assert health.sweep_downloads(str(d), 0) == 1 and os.listdir(d) == []
+    assert health.sweep_downloads(str(tmp_path / "missing"), 0) == 0

@@ -64,6 +64,7 @@ health_fail_sweeps: 3
 health_forward_failures: 5
 health_quiet_hours: 24
 health_repeat_hours: 6
+health_disk_free_gb: 5       # warn when the server's disk runs low
 
 # Upload handling
 max_upload_mb: 10         # your server's upload cap: 10 (no boost), 50 (Level 2), 100 (Level 3)

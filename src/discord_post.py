@@ -92,12 +92,15 @@ async def _compress(src_path, target_mb, timeout=120):
         if proc.returncode is None:
             try:
                 proc.kill()
+                await proc.wait()
             except ProcessLookupError:
                 pass
         log.warning("ffmpeg compress timed out after %ss", timeout)
+        _cleanup(out_path)  # a half-written _c.mp4 would otherwise stay on disk forever
         return None
     if proc.returncode != 0 or not os.path.exists(out_path):
         log.warning("ffmpeg compress failed: %s", (err.decode()[-400:] if err else ""))
+        _cleanup(out_path)
         return None
     return out_path
 

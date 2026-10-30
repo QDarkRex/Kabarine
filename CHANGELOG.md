@@ -2,6 +2,17 @@
 
 Reverse-chronological summary of what shipped. See `git log` for full detail.
 
+## 2026-10-30 (night) — no more leftover downloads
+
+- **X picks the right video size** — the best mp4 variant whose estimated size fits `max_upload_mb`
+  (a 5-min 4K clip now comes as the 832 kbps ~33 MB file instead of a ~950 MB download that hit the
+  300 MB cap and failed). A file still over `max_download_mb` is skipped and its link posted with a
+  note; before, the whole tweet failed silently and `/x get` claimed the post was deleted.
+- **Temp files are always cleaned up** — X temp folders on failure, half-written `_c.mp4` after a
+  failed or timed-out ffmpeg, and a sweep of `data/downloads` (everything at start, >2 h old every
+  5 min) for anything interrupted by a restart.
+- **Disk alert** — `health_disk_free_gb` (default 5).
+
 ## 2026-10-30 (late) — Kabarine
 
 - **Renamed** the repo `discord-media-downloader` → **Kabarine** (*kabar* "news" + Erine). GitHub

@@ -39,13 +39,18 @@ class Twitter(commands.Cog):
         cfg = self.bot.cfg
         info = await asyncio.to_thread(
             twitter.download, tid, self._workdir(), int(cfg.get("download_timeout", 180)),
-            int(cfg.get("max_files_per_post", 20)), int(cfg.get("max_download_mb", 300)))
+            int(cfg.get("max_files_per_post", 20)), int(cfg.get("max_download_mb", 300)),
+            float(cfg.get("max_upload_mb", 10)))
         scratch = []
         try:
             if info["media"]:
                 await post_media(channel, info["media"], twitter.caption(info), cfg, scratch,
                                  link_fallback=info["url"])
-            return len(info["media"])
+            if info["oversize"]:
+                head = "" if info["media"] else twitter.caption(info) + "\n"
+                await channel.send(f"{head}{info['url']}\n_({info['oversize']} video(s) too large "
+                                   f"to download — see the link)_".strip())
+            return len(info["media"]) + info["oversize"]
         finally:
             shutil.rmtree(info["dir"], ignore_errors=True)
             for p in scratch:

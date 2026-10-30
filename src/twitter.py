@@ -3,14 +3,15 @@
 Engine: the public fxtwitter API (`api.fxtwitter.com/status/<id>`) — the same service
 Tweetcord uses for its embeds. It needs no login, so there is no burner account to get
 flagged, and it hands out the ORIGINAL files: photos as `pbs.twimg.com/...?name=orig`,
-videos as a list of mp4 variants (we take the highest bitrate). Verified from the server
-2026-10-30: 1284x1712 photos and a native 668x1188 video.
+videos as a list of mp4 variants (we take the highest bitrate that fits the upload cap).
+Verified from the server 2026-10-30: 1284x1712 photos and a native 668x1188 video.
 
 Only the tweet's own media is fetched (not a quoted tweet's). A tweet without media
 returns no files; callers decide what to do with that.
 """
 import os
 import re
+import shutil
 import tempfile
 
 import requests
@@ -41,12 +42,23 @@ def tweet_id(url):
     return m.group(1) if m else None
 
 
-def _best_video_url(item):
+def _best_video_url(item, fit_mb=None):
+    """The highest-bitrate mp4 whose estimated size fits `fit_mb` (the upload cap), so
+    a 4K 25 Mbps clip isn't pulled at ~1 GB only to be squeezed down to 50 MB. With no
+    variant small enough, the smallest one (best chance to compress). Without `fit_mb`
+    or a duration, simply the highest bitrate."""
     variants = [v for v in (item.get("variants") or [])
                 if "mp4" in (v.get("content_type") or v.get("url") or "")]
-    if variants:
-        return max(variants, key=lambda v: v.get("bitrate") or 0)["url"]
-    return item.get("url")
+    if not variants:
+        return item.get("url")
+    by_rate = sorted(variants, key=lambda v: v.get("bitrate") or 0)
+    duration = float(item.get("duration") or 0)
+    if fit_mb and duration:
+        # bits/s * s / 8 = bytes; +10% for the container and audio
+        fits = [v for v in by_rate
+                if (v.get("bitrate") or 0) * duration / 8 * 1.1 <= fit_mb * 1024 * 1024]
+        return (fits[-1] if fits else by_rate[0])["url"]
+    return by_rate[-1]["url"]
 
 
 def fetch(tid, timeout=30):
@@ -58,34 +70,45 @@ def fetch(tid, timeout=30):
     return data["tweet"]
 
 
-def download(tid, workdir, timeout=180, max_files=20, max_mb=300):
+def download(tid, workdir, timeout=180, max_files=20, max_mb=300, fit_mb=None):
     """Download a tweet's media into a fresh temp dir.
 
-    Returns {"dir", "media": [paths], "author", "name", "text", "url"}. The caller
-    removes "dir". Each file is capped at max_mb so a huge video can't fill the disk.
+    Returns {"dir", "media": [paths], "oversize": n, "author", "name", "text", "url"}.
+    The caller removes "dir" (removed here if the download raises). Videos use the best
+    variant that fits `fit_mb`; any file still over max_mb is skipped and counted in
+    "oversize" so the caller can post the link instead.
     """
     tweet = fetch(tid)
     os.makedirs(workdir, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="x_", dir=workdir)
-    media, cap = [], max_mb * 1024 * 1024
-    for i, item in enumerate(((tweet.get("media") or {}).get("all") or [])[:max_files]):
-        kind = item.get("type")
-        url = _best_video_url(item) if kind in ("video", "gif") else item.get("url")
-        if not url:
-            continue
-        path = os.path.join(tmp, f"{tid}_{i + 1}{_EXT.get(kind, '')}")
-        with requests.get(url, headers=_UA, stream=True, timeout=timeout) as r:
-            r.raise_for_status()
-            size = 0
-            with open(path, "wb") as f:
-                for chunk in r.iter_content(1 << 16):
-                    size += len(chunk)
-                    if size > cap:
-                        raise RuntimeError(f"tweet {tid} item {i + 1} is over {max_mb} MB")
-                    f.write(chunk)
-        media.append(path)
+    media, oversize, cap = [], 0, max_mb * 1024 * 1024
+    try:
+        for i, item in enumerate(((tweet.get("media") or {}).get("all") or [])[:max_files]):
+            kind = item.get("type")
+            url = _best_video_url(item, fit_mb) if kind in ("video", "gif") else item.get("url")
+            if not url:
+                continue
+            path = os.path.join(tmp, f"{tid}_{i + 1}{_EXT.get(kind, '')}")
+            with requests.get(url, headers=_UA, stream=True, timeout=timeout) as r:
+                r.raise_for_status()
+                size = 0
+                with open(path, "wb") as f:
+                    for chunk in r.iter_content(1 << 16):
+                        size += len(chunk)
+                        if size > cap:
+                            break
+                        f.write(chunk)
+            if size > cap:
+                os.remove(path)
+                oversize += 1
+                continue
+            media.append(path)
+    except BaseException:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
     author = tweet.get("author") or {}
-    return {"dir": tmp, "media": media, "author": author.get("screen_name") or "",
+    return {"dir": tmp, "media": media, "oversize": oversize,
+            "author": author.get("screen_name") or "",
             "name": author.get("name") or "", "text": tweet.get("text") or "",
             "url": tweet.get("url") or f"https://x.com/i/status/{tid}"}
 

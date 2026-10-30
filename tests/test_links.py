@@ -144,3 +144,27 @@ def test_instagram_expired_story(monkeypatch, tmp_path):
     assert asyncio.run(instagram_post.handle_url(types.SimpleNamespace(send=send), url, {},
                                                  None, str(tmp_path))) is False
     assert len(texts) == 1 and "24 h" in texts[0] and url in texts[0]
+
+
+def test_failed_compress_leaves_no_partial_file(monkeypatch, tmp_path):
+    """ffmpeg exits non-zero after writing part of the output: the _c.mp4 must go."""
+    src = tmp_path / "7680535585908443925.mp4"
+    src.write_bytes(b"x")
+    out = tmp_path / "7680535585908443925_c.mp4"
+
+    async def duration(path):
+        return 4116.0
+
+    class Proc:
+        returncode = 1
+
+        async def communicate(self):
+            out.write_bytes(b"\x00" * 48)          # exactly what was left on the server
+            return b"", b"Killed"
+
+    async def spawn(*a, **k):
+        return Proc()
+    monkeypatch.setattr(discord_post, "_ffprobe_duration", duration)
+    monkeypatch.setattr(discord_post.asyncio, "create_subprocess_exec", spawn)
+    assert asyncio.run(discord_post._compress(str(src), 50)) is None
+    assert not out.exists() and src.exists()

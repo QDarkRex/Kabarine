@@ -12,6 +12,11 @@ Checks (every CHECK_EVERY seconds):
                 installed yt-dlp/gallery-dl versions and the newest ones on PyPI.
   3. forwards — `health_forward_failures` forwards in a row failed (download/upload)
   4. quiet    — nothing forwarded at all for `health_quiet_hours`
+  5. disk     — less than `health_disk_free_gb` free on the disk holding DATA_PATH
+
+Each check also deletes anything in DATA_PATH/downloads older than DOWNLOAD_MAX_AGE:
+every download is temporary, and one interrupted mid-way (container restarted or
+OOM-killed while compressing) would otherwise stay there forever.
 
 An alert is sent once when a problem starts, repeated every `health_repeat_hours`
 while it lasts, and followed by a recovery message when it clears. A short notice is
@@ -27,6 +32,7 @@ through the bot, can never report.
 import asyncio
 import json
 import os
+import shutil
 import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -37,6 +43,7 @@ from src.log import get_logger
 log = get_logger(__name__)
 
 CHECK_EVERY = 300  # seconds between health checks
+DOWNLOAD_MAX_AGE = 2 * 3600  # no download/compress runs this long (all are time-capped)
 EXTRACTORS = ("yt-dlp", "gallery-dl")
 
 # Alert wording, picked by `alert_language`.
@@ -58,6 +65,9 @@ TEXT = {
         "forward_ok": "✅ Media bot: forwards are working again.",
         "quiet": "⚠️ **Media bot: nothing forwarded for {hours} hours.** It looks alive but may be mute.",
         "quiet_ok": "✅ Media bot: items are flowing again.",
+        "disk": "⚠️ **Media bot: the server disk is almost full** — {free:.1f} GB free of {total:.0f} GB. "
+                "Downloads and the database will start failing.",
+        "disk_ok": "✅ Media bot: disk space is fine again ({free:.1f} GB free).",
     },
     "id": {
         "start": "✅ Media bot aktif — {summary}. yt-dlp {ytdlp}, gallery-dl {gdl}. "
@@ -78,8 +88,34 @@ TEXT = {
         "quiet": "⚠️ **Media bot: tidak ada post/story yang diteruskan selama {hours} jam.** "
                  "Bot tampak hidup tapi mungkin bisu.",
         "quiet_ok": "✅ Media bot: kiriman kembali mengalir.",
+        "disk": "⚠️ **Media bot: disk server hampir penuh** — sisa {free:.1f} GB dari {total:.0f} GB. "
+                "Download dan database akan mulai gagal.",
+        "disk_ok": "✅ Media bot: ruang disk aman lagi (sisa {free:.1f} GB).",
     },
 }
+
+
+def sweep_downloads(path, older_than):
+    """Delete entries in the downloads folder older than `older_than` seconds (0 = all).
+    Returns how many were removed."""
+    removed, cutoff = 0, time.time() - older_than
+    try:
+        names = os.listdir(path)
+    except OSError:
+        return 0
+    for name in names:
+        p = os.path.join(path, name)
+        try:
+            if os.path.getmtime(p) > cutoff:
+                continue
+            if os.path.isdir(p):
+                shutil.rmtree(p)
+            else:
+                os.remove(p)
+            removed += 1
+        except OSError:
+            pass
+    return removed
 
 
 def installed_versions():
@@ -236,6 +272,22 @@ class HealthMonitor:
             await self._raise("quiet", self._t("quiet", hours=hours))
         else:
             await self._clear("quiet", self._t("quiet_ok"))
+
+        data = os.getenv("DATA_PATH", "./data")
+        try:
+            usage = shutil.disk_usage(data)
+        except OSError:
+            usage = None
+        if usage:
+            free, total = usage.free / 1024 ** 3, usage.total / 1024 ** 3
+            if free < float(self._cfg("health_disk_free_gb", 5)):
+                await self._raise("disk", self._t("disk", free=free, total=total))
+            else:
+                await self._clear("disk", self._t("disk_ok", free=free))
+
+        n = sweep_downloads(os.path.join(data, "downloads"), DOWNLOAD_MAX_AGE)
+        if n:
+            log.info("removed %d stale item(s) from downloads/", n)
 
     async def _failing_text(self, name, f):
         have = installed_versions()
