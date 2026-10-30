@@ -17,7 +17,7 @@ T0 = datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc)
 
 def make(**cfg):
     clock = [T0]
-    bot = types.SimpleNamespace(cfg={**DEFAULTS, **cfg})
+    bot = types.SimpleNamespace(cfg={**DEFAULTS, "alert_language": "id", **cfg})
     h = health.HealthMonitor(bot)
     h._now = lambda: clock[0]
     h.started_at = T0
@@ -175,3 +175,18 @@ def test_story_sweep_reports_failures(monkeypatch, tmp_path):
     monkeypatch.setattr(tracking.asyncio, "sleep", no_sleep)
     run(tracking.Tracking(bot)._story_sweep())
     assert bot.health.sweeps == [("tiktok-story", 2, 3)]
+
+
+def test_english_wording():
+    h, sent, advance = make(alert_language="en")
+    h.register("tiktok-video")
+    advance(minutes=61)
+    run(h.check())
+    advance(hours=6, minutes=1)
+    run(h.check())
+    assert "is stuck" in sent[0] and "61 min" in sent[0] and "still the case" in sent[1]
+    h, sent, advance = make(alert_language="xx")   # unknown language falls back to English
+    for _ in range(5):
+        h.forward_failed()
+    run(h.check())
+    assert "5 forwards in a row failed" in sent[0]

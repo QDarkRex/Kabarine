@@ -137,7 +137,7 @@ class Instagram(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         if not instagram.is_valid_username(username):
             await interaction.followup.send(
-                "❌ That isn't an Instagram username. Type the handle itself, e.g. `jkt48.levi` — "
+                "❌ That isn't an Instagram username. Type the handle itself, e.g. `natgeo` — "
                 "choosing a role or member from Discord's @ list turns it into a mention.",
                 ephemeral=True)
             return

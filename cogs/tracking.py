@@ -82,7 +82,7 @@ class Tracking(commands.Cog):
             username, video_url = tiktok.normalize_username(username), None
         else:
             await interaction.followup.send(
-                "❌ That isn't a TikTok username. Type the handle itself, e.g. `indahjkt48`, or "
+                "❌ That isn't a TikTok username. Type the handle itself, e.g. `khaby.lame`, or "
                 "paste a full link to one of its videos — choosing a role or member from "
                 "Discord's @ list turns it into a mention.",
                 ephemeral=True)

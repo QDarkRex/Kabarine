@@ -1,5 +1,6 @@
-# TikTok bot settings. Mounted into the container, so changes here only need
-# `docker compose restart` (no rebuild).
+# Bot settings. Mounted into the container, so changes here only need
+# `docker compose restart` (no rebuild). Anything left out falls back to the
+# defaults in src/config.py.
 
 prefix: "!"
 activity_name: "TikTok"
@@ -27,9 +28,9 @@ max_files_per_post: 20    # safety cap on media files pulled from one IG carouse
 ig_proxy_fallback: true   # if gallery-dl gets nothing (login wall / no cookies), try a cookie-free
                           # public mirror. PUBLIC posts only; carousels return their FIRST item;
                           # private posts still can't be fetched.
-ig_monitoring_enabled: false  # downloader-only: /ig get + pasted links work, but the /ig add auto-feed
-                              # pollers DON'T run. Keeps the burner cookie fresh (only used on demand)
-                              # and avoids the datacenter-IP rate-limit spam. Set true to re-enable /ig add.
+ig_monitoring_enabled: true   # false = downloader-only: /ig get + pasted links still work, but the
+                              # /ig add auto-feed pollers DON'T run. The burner cookie is then used only
+                              # on demand, so it lasts far longer — a good idea on a datacenter IP.
 
 # Instagram monitoring (/ig add) — deliberately SLOW: Instagram flags aggressive
 # automated access. Accounts are sharded across the configured burners (IG_COOKIES),
@@ -54,6 +55,7 @@ max_download_mb: 300           # abort a TikTok download bigger than this
 # forwarding breaks: a stuck poller, most accounts unreadable (often a yt-dlp/gallery-dl
 # that needs upgrading — the alert says so), repeated failed forwards, or nothing at all
 # forwarded for a day. Sends a short notice on every start, and a recovery message.
+alert_language: en              # en | id
 health_alert_enabled: true
 health_alert_channel_id:        # empty = DM the owner of this bot's Discord application
 health_stall_minutes: 60
@@ -64,6 +66,6 @@ health_quiet_hours: 24
 health_repeat_hours: 6
 
 # Upload handling
-max_upload_mb: 50         # Discord Level 2 boost upload cap (~50 MB) — bigger cap = higher native res, less compression
+max_upload_mb: 10         # your server's upload cap: 10 (no boost), 50 (Level 2), 100 (Level 3)
 compress_oversize: true   # try ffmpeg compression before falling back to a link
 compress_timeout: 120     # kill an ffmpeg compress that runs longer than this (seconds)

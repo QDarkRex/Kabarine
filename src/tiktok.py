@@ -86,7 +86,7 @@ def post_link(text):
 def is_valid_username(name):
     """False for anything that can't be a TikTok handle — notably a Discord mention.
     Picking "@Indah" from Discord's @ menu in /tt add stored the role mention as the
-    username ("<@&1349590964217446481>jkt48"), which then failed every sweep."""
+    username ("<@&1234567890>somename"), which then failed every sweep."""
     return bool(_USERNAME_RE.fullmatch(normalize_username(name)))
 
 

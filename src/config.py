@@ -43,6 +43,7 @@ DEFAULTS = {
     "tiktok_download_timeout": 180,   # abort a TikTok download running longer than this
     "max_download_mb": 300,           # abort a TikTok download bigger than this
     # Health alerts (src/health.py) — DM the bot's owner (or a channel) when forwarding breaks
+    "alert_language": "en",           # en | id — wording of health alerts
     "health_alert_enabled": True,
     "health_alert_channel_id": None,  # None = DM the owner of this Discord application
     "health_stall_minutes": 60,       # a poller that finishes no sweep for this long is stuck

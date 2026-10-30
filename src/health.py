@@ -39,6 +39,48 @@ log = get_logger(__name__)
 CHECK_EVERY = 300  # seconds between health checks
 EXTRACTORS = ("yt-dlp", "gallery-dl")
 
+# Alert wording, picked by `alert_language`.
+TEXT = {
+    "en": {
+        "start": "✅ Media bot running — {summary}. yt-dlp {ytdlp}, gallery-dl {gdl}. Health checks are on.",
+        "still": "\n_(still the case)_",
+        "stall": "⚠️ **Media bot: poller `{name}` is stuck** — no sweep finished in {minutes} min. "
+                 "Check `docker compose logs --since 1h`.",
+        "stall_ok": "✅ Media bot: poller `{name}` is running again.",
+        "fail": "🚨 **Media bot: `{name}` can't read most accounts** — {streak} sweeps in a row, "
+                "last one {ok}/{total} OK.\nInstalled: {versions}. {hint}",
+        "fail_newer": "Newer versions exist — bump them in `requirements.txt` and rebuild.",
+        "fail_same": "These are the latest; TikTok/Instagram is probably rate-limiting the server's IP.",
+        "latest": " (latest {v})",
+        "fail_ok": "✅ Media bot: `{name}` is back to normal ({ok}/{total} accounts read).",
+        "forward": "⚠️ **Media bot: {n} forwards in a row failed** (download/upload to Discord). "
+                   "They will be retried, but check the logs.",
+        "forward_ok": "✅ Media bot: forwards are working again.",
+        "quiet": "⚠️ **Media bot: nothing forwarded for {hours} hours.** It looks alive but may be mute.",
+        "quiet_ok": "✅ Media bot: items are flowing again.",
+    },
+    "id": {
+        "start": "✅ Media bot aktif — {summary}. yt-dlp {ytdlp}, gallery-dl {gdl}. "
+                 "Pemantauan kesehatan berjalan.",
+        "still": "\n_(masih terjadi)_",
+        "stall": "⚠️ **Media bot: poller `{name}` macet** — tidak ada putaran selesai selama {minutes} "
+                 "menit. Cek `docker compose logs --since 1h`.",
+        "stall_ok": "✅ Media bot: poller `{name}` jalan lagi.",
+        "fail": "🚨 **Media bot: `{name}` gagal membaca sebagian besar akun** — {streak} putaran "
+                "berturut-turut, terakhir {ok}/{total} berhasil.\nTerpasang: {versions}. {hint}",
+        "fail_newer": "Ada versi lebih baru — naikkan versinya di `requirements.txt` lalu rebuild.",
+        "fail_same": "Versi sudah yang terbaru; kemungkinan TikTok/IG sedang membatasi IP server.",
+        "latest": " (terbaru {v})",
+        "fail_ok": "✅ Media bot: `{name}` kembali normal ({ok}/{total} akun terbaca).",
+        "forward": "⚠️ **Media bot: {n} kiriman berturut-turut gagal** (download/upload ke Discord). "
+                   "Item-nya akan dicoba lagi, tapi cek log.",
+        "forward_ok": "✅ Media bot: kiriman berhasil lagi.",
+        "quiet": "⚠️ **Media bot: tidak ada post/story yang diteruskan selama {hours} jam.** "
+                 "Bot tampak hidup tapi mungkin bisu.",
+        "quiet_ok": "✅ Media bot: kiriman kembali mengalir.",
+    },
+}
+
 
 def installed_versions():
     out = {}
@@ -90,6 +132,10 @@ class HealthMonitor:
     def _cfg(self, key, default):
         v = self.bot.cfg.get(key)
         return default if v is None else v
+
+    def _t(self, key, **kw):
+        lang = TEXT.get(self._cfg("alert_language", "en"), TEXT["en"])
+        return lang[key].format(**kw)
 
     # --- signals, fed by the pollers and monitor.forward_new ----------------------
 
@@ -143,7 +189,7 @@ class HealthMonitor:
         if last is None:
             await self.send(text)
         elif self._now() - last >= repeat:
-            await self.send(f"{text}\n_(masih terjadi)_")
+            await self.send(text + self._t("still"))
         else:
             return
         self._active[key] = self._now()
@@ -156,8 +202,7 @@ class HealthMonitor:
 
     async def startup_report(self, summary):
         v = installed_versions()
-        await self.send(f"✅ Media bot aktif — {summary}. yt-dlp {v['yt-dlp']}, "
-                        f"gallery-dl {v['gallery-dl']}. Pemantauan kesehatan berjalan.")
+        await self.send(self._t("start", summary=summary, ytdlp=v["yt-dlp"], gdl=v["gallery-dl"]))
 
     async def check(self):
         now = self._now()
@@ -168,35 +213,29 @@ class HealthMonitor:
             since = f.last_sweep_at or f.registered_at
             if now - since > stall:
                 minutes = int((now - since).total_seconds() // 60)
-                await self._raise(f"stall:{name}",
-                                  f"⚠️ **Media bot: poller `{name}` macet** — tidak ada putaran selesai "
-                                  f"selama {minutes} menit. Cek `docker compose logs --since 1h`.")
+                await self._raise(f"stall:{name}", self._t("stall", name=name, minutes=minutes))
             else:
-                await self._clear(f"stall:{name}", f"✅ Media bot: poller `{name}` jalan lagi.")
+                await self._clear(f"stall:{name}", self._t("stall_ok", name=name))
 
             if f.bad_streak >= fail_sweeps:
                 await self._raise(f"fail:{name}", await self._failing_text(name, f))
             else:
                 await self._clear(f"fail:{name}",
-                                  f"✅ Media bot: `{name}` kembali normal "
-                                  f"({f.last_ok}/{f.last_total} akun terbaca).")
+                                  self._t("fail_ok", name=name, ok=f.last_ok, total=f.last_total))
 
         limit = int(self._cfg("health_forward_failures", 5))
         if self.forward_fail_streak >= limit:
-            await self._raise("forward",
-                              f"⚠️ **Media bot: {self.forward_fail_streak} kiriman berturut-turut gagal** "
-                              f"(download/upload ke Discord). Item-nya akan dicoba lagi, tapi cek log.")
+            await self._raise("forward", self._t("forward", n=self.forward_fail_streak))
         else:
-            await self._clear("forward", "✅ Media bot: kiriman berhasil lagi.")
+            await self._clear("forward", self._t("forward_ok"))
 
         quiet = timedelta(hours=float(self._cfg("health_quiet_hours", 24)))
         since = self.last_forward_at or self.started_at
         if any(f.last_total for f in self.feeds.values()) and now - since > quiet:
             hours = int((now - since).total_seconds() // 3600)
-            await self._raise("quiet", f"⚠️ **Media bot: tidak ada post/story yang diteruskan selama "
-                                       f"{hours} jam.** Bot tampak hidup tapi mungkin bisu.")
+            await self._raise("quiet", self._t("quiet", hours=hours))
         else:
-            await self._clear("quiet", "✅ Media bot: kiriman kembali mengalir.")
+            await self._clear("quiet", self._t("quiet_ok"))
 
     async def _failing_text(self, name, f):
         have = installed_versions()
@@ -204,13 +243,11 @@ class HealthMonitor:
         parts = []
         for pkg in EXTRACTORS:
             newer = latest.get(pkg)
-            parts.append(f"{pkg} {have[pkg]}" + (f" (terbaru {newer})" if newer and newer != have[pkg] else ""))
-        hint = ("Ada versi lebih baru — naikkan versinya di `requirements.txt` lalu rebuild."
-                if any(latest.get(p) and latest[p] != have[p] for p in EXTRACTORS)
-                else "Versi sudah yang terbaru; kemungkinan TikTok/IG sedang membatasi IP server.")
-        return (f"🚨 **Media bot: `{name}` gagal membaca sebagian besar akun** — "
-                f"{f.bad_streak} putaran berturut-turut, terakhir {f.last_ok}/{f.last_total} berhasil.\n"
-                f"Terpasang: {', '.join(parts)}. {hint}")
+            parts.append(f"{pkg} {have[pkg]}"
+                         + (self._t("latest", v=newer) if newer and newer != have[pkg] else ""))
+        newer_exists = any(latest.get(p) and latest[p] != have[p] for p in EXTRACTORS)
+        return self._t("fail", name=name, streak=f.bad_streak, ok=f.last_ok, total=f.last_total,
+                       versions=", ".join(parts), hint=self._t("fail_newer" if newer_exists else "fail_same"))
 
     def write_heartbeat(self):
         path = os.path.join(os.getenv("DATA_PATH", "./data"), "health")

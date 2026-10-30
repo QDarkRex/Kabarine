@@ -9,4 +9,7 @@ cookies.txt
 *.db
 .venv/
 venv/
-DEPLOY.md
+docs/
+tests/
+watchdog/
+.pytest_cache/

@@ -1,0 +1,16 @@
+# Outside watchdog for the bot (see watchdog.py). Copy this folder NEXT TO the bot's
+# folder, create .env (see .env.example) and run `docker compose up -d` here.
+# To watch more bots, mount each one's data/health folder and add it to WATCH.
+services:
+  watchdog:
+    image: python:3.11-slim
+    container_name: bot-watchdog
+    restart: unless-stopped
+    env_file: .env
+    command: ["python", "-u", "/app/watchdog.py"]
+    mem_limit: 64m
+    cpus: 0.25
+    read_only: true
+    volumes:
+      - ./watchdog.py:/app/watchdog.py:ro
+      - ../discord-media-downloader/data/health:/watch/media-bot:ro   # the bot's folder name

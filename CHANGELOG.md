@@ -1,9 +1,25 @@
 # Changelog
 
-Reverse-chronological summary of what shipped. See `git log` for full detail and
-[`STATUS.md`](STATUS.md) for what is currently deployed vs. pending.
+Reverse-chronological summary of what shipped. See `git log` for full detail.
 
-## 2026-10-30 — deployed from `deploy/ig-fixes-lean`
+## 2026-10-30 (later) — health alerts, watchdog, public release
+
+- **Health alerts** (`src/health.py`) — the bot DMs its owner (or `health_alert_channel_id`) when a
+  poller stalls, when most accounts are unreadable for 3 sweeps in a row (naming the installed and
+  newest yt-dlp/gallery-dl), when 5 forwards in a row fail, or when nothing was forwarded for 24h;
+  plus recovery messages and a startup notice. `alert_language: en|id`.
+- **Watchdog** (`watchdog/`) — separate stdlib-only container that alerts when a bot's
+  `data/health/heartbeat.json` goes stale (stopped / hung container).
+- **Pinned extractors** — yt-dlp 2026.10.26 and gallery-dl 1.32.18, the versions verified live.
+  Rebuilds no longer upgrade them silently; upgrade on purpose when the health alert asks.
+- **`/tt add` takes a video link** — ids come from that page and the listing goes through the
+  secUid, skipping the flaky @handle page.
+- **Short links to photo posts** — a redirect to `/photo/<id>?_r=1&_t=...` ("Unsupported URL") is
+  now posted as a photo post.
+- **Tests in the repo** — `tests/`, 28 pytest tests, no network.
+- **Public release** — new README, MIT license, generic docs (`docs/`), public config defaults.
+
+## 2026-10-30
 
 - **TikTok video listing via secUid** — the poller lists `tiktokuser:<secUid>` instead of the @handle
   profile page. Measured on the server, all 54 accounts back to back: @handle failed 35/54
@@ -24,7 +40,7 @@ Reverse-chronological summary of what shipped. See `git log` for full detail and
   migration on every start, and `INSERT OR IGNORE` re-created everything deleted since. It now
   runs once and renames the table to `accounts_migrated_backup`.
 
-## 2026-10-25 — deployed from `deploy/ig-fixes-lean`
+## 2026-10-25
 
 - **TikTok story auto-forward** — `/tt add type:stories|both`. yt-dlp can't list stories, but gallery-dl's
   TikTok stories extractor can; from the server its profile-page lookup is 403'd, so the numeric user id is
@@ -35,7 +51,7 @@ Reverse-chronological summary of what shipped. See `git log` for full detail and
 - `/tt remove` gained `type:` (default: videos and stories); `/tt list` shows each subscription's type and
   is split into several messages — with ~57 accounts it exceeded Discord's 2000-character limit.
 
-## Unreleased on the server (pushed to `main`, not yet deployed)
+## 2026-07 — 2026-10
 
 - **TikTok photo/slideshow posts** — previously nothing was posted: yt-dlp rejects
   `/photo/<id>` as "Unsupported URL" and fails `/video/<id>` of a photo post with "No video
@@ -68,13 +84,13 @@ Reverse-chronological summary of what shipped. See `git log` for full detail and
   `src/tiktok_story.py` uses a logged-in Playwright/Chromium session to open a profile, click the
   avatar/story entry, and sniff `tiktok.com/@user/video/<id>` URLs from network responses. Opt-in
   (`tiktok_story_enabled`, default off) + `TIKTOK_STORY_COOKIES`. Separate slow poller in
-  `cogs/tracking.py`. **Needs a `mem_limit` bump before enabling — see STATUS.md.**
+  `cogs/tracking.py`. Later reverted (`7271560`) in favour of the gallery-dl poller.
 - **Instagram story ID-mismatch fix** (`c07011c`) — `download_stories` now reads the item id from the
   metadata sidecar (`media_id`/`id`, filename-digits fallback), and `_forward_stories` computes new items
   from the downloaded set itself instead of intersecting list-vs-download ids (which could silently skip &
   advance past items).
 
-## Deployed
+## Before that
 
 - **`AGENTS.md`** handoff doc (`a211e5b`).
 - **TikTok native resolution** (`bee6f9e`) — pick highest-res rendition, not h264-capped 720p (TikTok 1080p

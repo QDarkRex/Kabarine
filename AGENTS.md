@@ -1,12 +1,12 @@
 # AGENTS.md — developer handoff & context
 
 Self-hosted Discord bot: forwards **TikTok** + **Instagram** media into Discord, both
-on-demand and via account monitoring. Python + discord.py, one Docker container.
-Engines: **yt-dlp** (TikTok) and **gallery-dl** (Instagram).
+on-demand and via account monitoring, plus on-demand **X** downloads. Python + discord.py,
+one Docker container. Engines: **yt-dlp** (TikTok videos), **gallery-dl** (Instagram,
+TikTok story listing) and the public **fxtwitter** API (X).
 
 This file is the single source of truth for anyone (human or AI) picking up the code.
-IG story forwarding had a real ID-mismatch bug; the current code includes the robustness fix.
-If stories still do not appear, start with [§7](#7-instagram-stories-debugging).
+Run the tests (`pytest`, see [§10](#10-local-dev--testing-patterns)) before and after a change.
 
 ---
 
@@ -29,13 +29,20 @@ src/
   monitor.py           shared POST forwarder: forward_new(...) diff recent vs last_seen, ping tag, forward oldest-first
   mentions.py          parse Role/Member/@everyone slash param -> (type,id); mention_string / announce() (pings)
   discord_utils.py     suppress_link_embeds (removes Discord's auto preview embed; needs Manage Messages)
+  tiktok_story.py      TikTok story listing via gallery-dl + numeric-id/secUid resolution (yt-dlp)
+  twitter.py           X/Twitter: find_links, fetch (fxtwitter API), download best mp4 / original photos
+  health.py            HealthMonitor: owner DM alerts (stalled/failing pollers, failed forwards, silence)
+                       + data/health/heartbeat.json for the outside watchdog
 cogs/
-  tracking.py          /tt group (add/remove/list/get) + TikTok poller (fast, ~2.5 min sweep)
+  tracking.py          /tt group (add/remove/list/get) + TikTok video poller (~2.5 min) + story poller (~10 min)
   instagram.py         /ig group (get/add/remove/list) + IG poller (slow, per-burner sharded) + _forward_stories
   ondemand.py          TikTok paste auto-detect listener
+  twitter.py           /x get + X paste auto-detect (posts with media only)
+tests/                 pytest suite (fake Discord, temp SQLite, canned extractor output; no network)
+watchdog/              tiny stdlib-only container that alerts when a bot's heartbeat goes stale
 ```
 
-Discord identity: bot **Aerox Joget#4488** (token in gitignored `.env`). Two slash groups: `/tt`, `/ig`.
+Three slash groups: `/tt`, `/ig`, `/x`. The token lives in the gitignored `.env`.
 
 ---
 
@@ -188,10 +195,10 @@ should show the story poller running and whether forwards/failures occurred.
   story" makes gallery-dl's cursor crash ("Could not extract next cursor") — read as an empty list. Story
   markers are compared **numerically** (`monitor.forward_new(by_id=True)`), because the marked story expires
   after 24h and the walk-until-marker logic used for videos would then re-send every story still up.
-  Anonymous; no browser. Depends on an undocumented TikTok endpoint and gallery-dl internals — a gallery-dl
-  upgrade can break it (the build currently keeps the cached pip layer: gallery-dl 1.32.15). The earlier
-  Playwright watcher (`f58e45a`, on `main`) is **superseded** and uses the same file/config names — don't
-  merge both.
+  Anonymous; no browser. Depends on an undocumented TikTok endpoint and gallery-dl internals — which is
+  why yt-dlp and gallery-dl are **pinned** in `requirements.txt`; upgrade deliberately (the health alert
+  names newer versions when most accounts start failing). The earlier Playwright watcher (`f58e45a`) was
+  reverted (`7271560`) and is superseded.
 - **Native video codec trade-off:** TikTok native 1080p and IG native reels are often **h265 / VP9**, which
   may not inline-preview on some Discord clients (shows as a downloadable attachment). Chosen deliberately for
   true native quality. `tiktok_native: false` reverts TikTok to h264 (inline, up to 720p). IG uses gallery-dl
@@ -206,26 +213,24 @@ should show the story poller running and whether forwards/failures occurred.
 
 ## 9. Deployment
 
-> **Current deploy status & risks live in [`STATUS.md`](STATUS.md) — read it first.** The server runs
-> branch `deploy/ig-fixes-lean`, not `main`. Its TikTok story poller is the gallery-dl one (no Chromium,
-> fits `mem_limit: 512m`); the Playwright watcher on `main` is superseded.
-
-Container `tiktokbot` on a Docker host (currently a VPS; `data/` bind-mounted).
+See [docs/deploy.md](docs/deploy.md). Container `tiktokbot`, `data/` bind-mounted.
 - **Code change** → rebuild: `docker compose up -d --build`.
-- **configs.yml-only change** → `docker compose restart`.
-- Build a no-secrets bundle: `tar -czf ../tiktok-deploy.tar.gz --exclude=.git --exclude=__pycache__ --exclude=.env --exclude=data --exclude=.venv --exclude='*.tar.gz' .`
+- **configs.yml-only change** → `docker compose restart`. Keep your server's `configs.yml` when updating
+  the code (it holds your settings; missing keys fall back to `src/config.py` DEFAULTS).
 - `data/` is owned by the container's uid 1000, so the SSH user can't write into it directly — place files
   (e.g. cookies) via a throwaway root container:
-  `docker run --rm -v $PWD/data:/data -v ~/file:/f:ro --entrypoint cp tiktokbot-tiktokbot /f /data/file`.
-- Health check: `docker compose logs --tail=20 tiktokbot` should show both `tiktok poller alive` and
-  `instagram poller 0 alive`, `... is online`, `synced 2 slash command(s)`.
+  `docker run --rm -v $PWD/data:/data -v ~/file:/f:ro --entrypoint cp <image> /f /data/file`.
+- Health check: the bot DMs its owner "✅ Media bot running" on start; the logs show `tiktok poller alive`,
+  `tiktok story poller alive`, `... is online`, `synced 3 slash command(s)`.
 
 ---
 
 ## 10. Local dev / testing patterns
 
-- `python -m venv .venv`; `.venv/Scripts/pip install -r requirements.txt`.
-- Compile check: `python -m py_compile bot.py src/*.py cogs/*.py`.
+- `python -m venv .venv`; `.venv/Scripts/pip install -r requirements.txt pytest`.
+- Tests: `.venv/Scripts/python -m pytest -q tests` — no network, no Discord; each file also runs on its own
+  (`python tests/test_stories.py`). Pollers take a `bot` with a `health` attribute — use
+  `tests/fakes.FakeHealth`.
 - Wrappers are subprocess-based and testable directly, e.g.:
   `python -c "from src import instagram; print(instagram.list_stories('natgeo', cookies='data/ig_cookies.txt'))"`
 - gallery-dl is invoked via `python -m gallery_dl` (PATH-independent). ffmpeg/ffprobe are needed for
@@ -258,3 +263,17 @@ Container `tiktokbot` on a Docker host (currently a VPS; `data/` bind-mounted).
 - IG single-post/story links need cookies (login redirect when logged out).
 - TikTok 1080p is h265-only; h264 caps at 720p.
 - gallery-dl warns "lowered video quality" for non-Chrome UA → a desktop Chrome UA is pinned.
+
+---
+
+## 12. Health alerts & watchdog
+
+- `src/health.py` (`bot.health`): pollers call `register(feed)` / `sweep(feed, ok, total)`;
+  `monitor.forward_new` and the IG story forwarder call `forwarded()` / `forward_failed()`. Every 5 min it
+  checks: stalled poller (`health_stall_minutes`), `health_fail_sweeps` sweeps in a row with ≥
+  `health_fail_ratio` unreadable accounts (alert names installed vs PyPI yt-dlp/gallery-dl), a streak of
+  `health_forward_failures` failed forwards, and nothing forwarded for `health_quiet_hours`. One alert per
+  problem, repeated every `health_repeat_hours`, plus recovery. Wording: `alert_language` (en/id).
+- Each check writes `data/health/heartbeat.json`. `watchdog/` runs separately and alerts when that file
+  goes stale — the only way to hear about a stopped/hung container, since the bot can't report its own death.
+- Neither can see the whole host going down; that needs a check from another machine.
