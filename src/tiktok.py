@@ -69,6 +69,17 @@ def normalize_username(name):
     return (name or "").strip().lstrip("@").strip().lower()
 
 
+# TikTok handles: 2-24 letters, digits, '_' or '.'.
+_USERNAME_RE = re.compile(r"[a-z0-9._]{2,24}")
+
+
+def is_valid_username(name):
+    """False for anything that can't be a TikTok handle — notably a Discord mention.
+    Picking "@Indah" from Discord's @ menu in /tt add stored the role mention as the
+    username ("<@&1349590964217446481>jkt48"), which then failed every sweep."""
+    return bool(_USERNAME_RE.fullmatch(normalize_username(name)))
+
+
 class _QuietLogger:
     """Swallow yt-dlp's own stdout/stderr chatter — we surface failures via raised
     exceptions, so its ERROR prints would just be duplicate noise in the logs."""

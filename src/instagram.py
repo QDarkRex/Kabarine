@@ -65,6 +65,16 @@ def normalize_username(name):
     return (name or "").strip().lstrip("@").strip().strip("/").lower()
 
 
+# Instagram handles: 1-30 letters, digits, '_' or '.'.
+_USERNAME_RE = re.compile(r"[a-z0-9._]{1,30}")
+
+
+def is_valid_username(name):
+    """False for anything that can't be an Instagram handle — e.g. a Discord mention
+    picked from the @ menu (see tiktok.is_valid_username)."""
+    return bool(_USERNAME_RE.fullmatch(normalize_username(name)))
+
+
 def list_recent(username, count=3, cookies=None, proxy=None, timeout=60):
     """List an account's most-recent POSTS without downloading media (for monitoring).
 

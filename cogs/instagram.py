@@ -135,6 +135,12 @@ class Instagram(commands.Cog):
                   channel: Optional[Target] = None, tag: Optional[Tag] = None,
                   type: Optional[app_commands.Choice[str]] = None):
         await interaction.response.defer(ephemeral=True)
+        if not instagram.is_valid_username(username):
+            await interaction.followup.send(
+                "❌ That isn't an Instagram username. Type the handle itself, e.g. `jkt48.levi` — "
+                "choosing a role or member from Discord's @ list turns it into a mention.",
+                ephemeral=True)
+            return
         username = instagram.normalize_username(username)
         burner = self._burner_for(username)
         if burner is None:
