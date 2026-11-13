@@ -130,7 +130,8 @@ async def send_video(channel, file_path, content, source_url, cfg):
 
     if send_path:
         try:
-            await channel.send(content=content or None, file=discord.File(send_path))
+            from src.instagram_post import with_source  # lazy: instagram_post imports this module
+            await channel.send(content=with_source(content, source_url) or None, file=discord.File(send_path))
             _cleanup(compressed)
             return True
         except discord.HTTPException as e:

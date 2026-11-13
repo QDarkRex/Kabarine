@@ -76,6 +76,14 @@ async def _send_batch(channel, paths, content):
         first = False
 
 
+def with_source(content, source_url):
+    """Append the original post link as Discord small text with its preview suppressed."""
+    if not source_url or not str(source_url).startswith(("https://", "http://")):
+        return content
+    line = f"-# <{source_url}>"
+    return f"{content}\n{line}" if content else line
+
+
 async def post_media(channel, media, caption, cfg, scratch, link_fallback=None):
     """Send already-downloaded media files to `channel`, compressing oversize videos
     and batching (<=10 per message, caption on the first). Returns True if anything was
@@ -90,8 +98,11 @@ async def post_media(channel, media, caption, cfg, scratch, link_fallback=None):
 
     uploaded = False
     first = True
+    # Source link as small, embed-free text so readers (and Ritsu, on a reply) can open
+    # the original post — caption, comments, replies — not only the re-uploaded files.
+    first_caption = with_source(caption, link_fallback)
     for i in range(0, len(sendable), _MAX_ATTACHMENTS):
-        await _send_batch(channel, sendable[i:i + _MAX_ATTACHMENTS], caption if first else None)
+        await _send_batch(channel, sendable[i:i + _MAX_ATTACHMENTS], first_caption if first else None)
         uploaded = True
         first = False
 

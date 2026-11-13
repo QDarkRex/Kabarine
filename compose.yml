@@ -11,3 +11,8 @@ services:
     volumes:
       - ./data/:/bot/data          # SQLite db + temp downloads (+ optional cookies.txt)
       - ./configs.yml:/bot/configs.yml
+    # Optional internal API for an assistant bot (src/ritsu_api.py). Off unless
+    # KABARINE_API_SECRET is set; bind it to a private address (e.g. your VPN IP),
+    # never a public one. Defaults to localhost.
+    ports:
+      - "${KABARINE_API_BIND:-127.0.0.1}:8460:8460"

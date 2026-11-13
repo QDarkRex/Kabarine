@@ -124,6 +124,11 @@ async def _run():
             if fn.endswith(".py") and fn != "__init__.py":
                 await bot.load_extension(f"cogs.{fn[:-3]}")
                 log.info("loaded cog %s", fn)
+        from src import ritsu_api
+        try:
+            bot.ritsu_api = await ritsu_api.start(bot)
+        except OSError:
+            log.exception("ritsu API failed to start; the bot runs without it")
         await bot.start(token)
 
 
