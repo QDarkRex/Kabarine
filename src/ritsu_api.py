@@ -2,6 +2,7 @@
 
 GET /healthz
 GET /ig/comments?code=<shortcode>&limit=<n>   -> public comments via the IG burner
+GET /tiktok/latest?user=<username>            -> newest videos (no download), 20/hour
 
 Disabled unless KABARINE_API_SECRET is set. The compose file publishes the port on
 the Tailscale address only.
@@ -13,7 +14,9 @@ import os
 
 from aiohttp import web
 
-from src import ig_comments
+import time
+
+from src import ig_comments, tiktok
 
 log = logging.getLogger("kabarine.ritsu_api")
 
@@ -45,10 +48,62 @@ def build_app(bot):
             return web.json_response({"status": "unavailable", "reason": type(exc).__name__}, status=502)
         return web.json_response(result, status=200 if result.get("status") == "ok" else 400)
 
+    async def tiktok_latest(request):
+        """Newest videos of one profile (no download) so a missed post can be told apart
+        from an account that simply hasn't posted."""
+        if not _authorized(request):
+            return web.json_response({"status": "unauthorized"}, status=401)
+        user = tiktok.normalize_username(request.query.get("user", ""))
+        if not tiktok.is_valid_username(user):
+            return web.json_response({"status": "invalid_user"}, status=400)
+        if not _tiktok_slot():
+            return web.json_response({"status": "rate_limited"}, status=429)
+        sec_uid = None
+        try:
+            import aiosqlite
+            async with aiosqlite.connect(bot.db_path) as db:
+                cur = await db.execute("SELECT sec_uid FROM tiktok_user_ids WHERE username = ?", (user,))
+                row = await cur.fetchone()
+                sec_uid = row[0] if row and row[0] else None
+        except Exception:  # listing still works without it, just less reliably
+            sec_uid = None
+        try:
+            items = await asyncio.to_thread(tiktok.list_recent, user, 6, bot.cookies, bot.proxy, sec_uid)
+        except Exception as exc:
+            log.warning("tiktok listing failed for %s (%s)", user, type(exc).__name__)
+            return web.json_response({"status": "unavailable", "reason": type(exc).__name__}, status=502)
+        for item in items:
+            item["posted_at"] = _tiktok_time(item.get("id"))
+        items.sort(key=lambda item: item.get("posted_at") or "", reverse=True)  # pinned posts come first
+        return web.json_response({"status": "ok", "user": user, "videos": items})
+
     app = web.Application()
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/ig/comments", comments)
+    app.router.add_get("/tiktok/latest", tiktok_latest)
     return app
+
+
+_tiktok_calls = []
+
+
+def _tiktok_slot(hourly_cap=20):
+    now = time.time()
+    _tiktok_calls[:] = [t for t in _tiktok_calls if now - t < 3600]
+    if len(_tiktok_calls) >= hourly_cap:
+        return False
+    _tiktok_calls.append(now)
+    return True
+
+
+def _tiktok_time(item_id):
+    try:
+        seconds = int(item_id) >> 32
+    except (TypeError, ValueError):
+        return None
+    if not 1_400_000_000 < seconds < 2_200_000_000:
+        return None
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(seconds))
 
 
 async def start(bot, port=8460):

@@ -49,3 +49,11 @@ def test_api_requires_bearer(monkeypatch, header, status):
             await client.close()
 
     assert asyncio.run(run()) == status
+
+
+def test_tiktok_time_and_slot():
+    assert ritsu_api._tiktok_time("7707190049711983924").startswith("2026-11-12")
+    assert ritsu_api._tiktok_time("abc") is None
+    ritsu_api._tiktok_calls[:] = []
+    assert all(ritsu_api._tiktok_slot(hourly_cap=2) for _ in range(2))
+    assert not ritsu_api._tiktok_slot(hourly_cap=2)
